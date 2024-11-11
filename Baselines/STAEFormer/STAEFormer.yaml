@@ -13,7 +13,7 @@ didi:
   weight_decay: 0.0015
   milestones: [25, 45, 65]
   lr_decay_rate: 0.1
-  batch_size: 64
+  batch_size: 16
   max_epochs: 1
   early_stop: 10
   use_cl: False
@@ -26,7 +26,7 @@ didi:
     steps_per_day: 288
     input_dim: 3
     output_dim: 1
-    input_embedding_dim: 12
+    input_embedding_dim: 24
     tod_embedding_dim: 24
     dow_embedding_dim: 24
     spatial_embedding_dim: 0
