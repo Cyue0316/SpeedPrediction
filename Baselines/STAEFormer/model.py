@@ -194,51 +194,47 @@ class STAEformer(nn.Module):
         
         # add embeddings day of month, month of year
         batch_size = x.shape[0]
-        print(f"x shape: {x.shape}")
+        # print(f"x shape: {x.shape}")
 
         if self.tod_embedding_dim > 0:
             tod = x[..., 1]
-            print(f"tod shape: {tod.shape}")
-            print(tod)
+            # print(f"tod shape: {tod.shape}")
+            # print(tod)
+            # indices = (tod * self.steps_per_day).clamp(0, self.steps_per_day - 1).long()
+            # print("Embedding Indices - min:", indices.min().item(), "max:", indices.max().item())  # 检查索引范围
         if self.dow_embedding_dim > 0:
             dow = x[..., 2]
-            print(f"dow shape: {dow.shape}")
-            print(dow)
             
         x = x[..., : self.input_dim]
 
         x = self.input_proj(x)  # (batch_size, in_steps, num_nodes, input_embedding_dim)
-        print(x.shape)
         features = [x]
-        if self.tod_embedding_dim > 0:
-            tod_emb = self.tod_embedding(
-                (tod * self.steps_per_day).long()
-            )  # (batch_size, in_steps, num_nodes, tod_embedding_dim)
-            print(f"tod_emb shape: {tod_emb.shape}")
-            indices = (tod * self.steps_per_day).clamp(0, self.steps_per_day - 1).long()
-            print("Embedding Indices - min:", indices.min().item(), "max:", indices.max().item())  # 检查索引范围
-
-            features.append(tod_emb)
+        try:
+            if self.tod_embedding_dim > 0:
+                # indices = (tod * self.steps_per_day).long()
+                indices = (tod * self.steps_per_day).clamp(0, self.steps_per_day - 1).long()
+                # print("Embedding Indices - min:", indices.min().item(), "max:", indices.max().item())
+                tod_emb = self.tod_embedding(indices)  # (batch_size, in_steps, num_nodes, tod_embedding_dim)
+                # print("TOD embedding shape:", tod_emb.shape)
+                features.append(tod_emb)
+        except Exception as e:
+            print("Error with TOD embedding:", e)
+            return
         if self.dow_embedding_dim > 0:
             dow_emb = self.dow_embedding(
                 dow.long()
             )  # (batch_size, in_steps, num_nodes, dow_embedding_dim)
-            print(f"dow_emb shape: {dow_emb.shape}")
             features.append(dow_emb)
         if self.spatial_embedding_dim > 0:
             spatial_emb = self.node_emb.expand(
                 batch_size, self.in_steps, *self.node_emb.shape
             )
-            print(f"spatial_emb shape: {spatial_emb.shape}")
             features.append(spatial_emb)
         if self.adaptive_embedding_dim > 0:
             adp_emb = self.adaptive_embedding.expand(
                 size=(batch_size, *self.adaptive_embedding.shape)
             )
-            print(f"adp_emb shape: {adp_emb.shape}")
             features.append(adp_emb)
-        print(f"Max TOD: {tod.max()}, Min TOD: {tod.min()}")
-        print(f"Max DOW: {dow.max()}, Min DOW: {dow.min()}")
         # print(features.shape)
         x = torch.cat(features, dim=-1)  # (batch_size, in_steps, num_nodes, model_dim)
 
@@ -265,7 +261,6 @@ class STAEformer(nn.Module):
             out = self.output_proj(
                 out.transpose(1, 3)
             )  # (batch_size, out_steps, num_nodes, output_dim)
-
         return out
 
 

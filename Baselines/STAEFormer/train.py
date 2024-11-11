@@ -116,8 +116,8 @@ def train(
     wait = 0
     min_val_loss = np.inf
     # 生成 dt_list
-    dt = "20240630"
-    dt_list = [(datetime.datetime.strptime(dt, '%Y%m%d') + datetime.timedelta(days=i)).strftime('%Y%m%d') for i in range(110)]
+    dt = "20240701"
+    dt_list = [(datetime.datetime.strptime(dt, '%Y%m%d') + datetime.timedelta(days=i)).strftime('%Y%m%d') for i in range(109)]
 
     # 计算划分点
     total_len = len(dt_list)
@@ -130,7 +130,7 @@ def train(
 
     train_loss_list = []
     val_loss_list = []
-    dt = "20240630"
+    dt = "20240701"
 
     
     # dt_list = [(datetime.strptime(dt, '%Y%m%d') + datetime.timedelta(days=i)).strftime('%Y%m%d') for i in range(110)]
@@ -240,7 +240,7 @@ def test_model(model, testset_loader, scaler, log=None):
 
 if __name__ == "__main__":
     # -------------------------- set running environment ------------------------- #
-    dt = '20240630'
+    dt = '20240701'
     parser = argparse.ArgumentParser()
     parser.add_argument("-d", "--dataset", type=str, default="pems08")
     parser.add_argument("-g", "--gpu_num", type=int, default=0)
@@ -297,7 +297,7 @@ if __name__ == "__main__":
     #     log=log,
     # )
     # print_log(log=log)
-    trainset_loader, scaler = get_dt_dataloaders("20240630")
+    trainset_loader, scaler = get_dt_dataloaders("20240701")
     # --------------------------- set model saving path -------------------------- #
 
     save_path = f"../saved_models/"

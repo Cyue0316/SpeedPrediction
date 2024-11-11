@@ -102,8 +102,7 @@ def get_dt_dataloaders(
     # 计算 min 和 max 值
     data_min = data_x_1.min()
     data_max = data_x_1.max()
-    data_min = 0
-    data_max = 287
+
 
     # 对 data_x[..., 1] 进行手动的归一化
     data_x_1_normalized = (data_x_1 - data_min) / (data_max - data_min)
@@ -111,7 +110,7 @@ def get_dt_dataloaders(
     # 将标准化后的 data_x[..., 1] 重新赋值回 data_x
     data_x[..., 1] = data_x_1_normalized
 
-    print_log(f"Train data:\tx-{data_x.shape}\ty-{datay.shape}", log=log)
+    print_log(f"Data Shape:\tx-{data_x.shape}\ty-{datay.shape}", log=log)
 
     dataset = torch.utils.data.TensorDataset(
         torch.FloatTensor(data_x), torch.FloatTensor(datay)
@@ -120,7 +119,7 @@ def get_dt_dataloaders(
     dataset_loader = torch.utils.data.DataLoader(
         dataset, batch_size=batch_size, shuffle=True
     )
-
+    print(f"Load data {dt} Finish!")
     return dataset_loader, scaler
 
 # not used
