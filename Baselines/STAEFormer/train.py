@@ -20,14 +20,14 @@ from lib.utils import (
     CustomJSONEncoder,
 )
 from lib.metrics import RMSE_MAE_MAPE
-from lib.data_prepare import get_dt_dataloaders, get_val_dataloaders
+from lib.data_prepare import get_dt_dataloaders
 from model import STAEformer
 
 # ! X shape: (B, T, N, C)
 
 
 @torch.no_grad()
-def eval_model(model, valset_loader, criterion):
+def eval_model(model, valset_loader, criterion, scaler):
     model.eval()
     batch_loss_list = []
     for x_batch, y_batch in valset_loader:
@@ -35,7 +35,7 @@ def eval_model(model, valset_loader, criterion):
         y_batch = y_batch.to(DEVICE)
 
         out_batch = model(x_batch)
-        out_batch = SCALER.inverse_transform(out_batch)
+        out_batch = scaler.inverse_transform(out_batch)
         loss = criterion(out_batch, y_batch)
         batch_loss_list.append(loss.item())
 
@@ -43,7 +43,7 @@ def eval_model(model, valset_loader, criterion):
 
 
 @torch.no_grad()
-def predict(model, loader):
+def predict(model, loader, scaler):
     model.eval()
     y = []
     out = []
@@ -53,7 +53,7 @@ def predict(model, loader):
         y_batch = y_batch.to(DEVICE)
 
         out_batch = model(x_batch)
-        out_batch = SCALER.inverse_transform(out_batch)
+        out_batch = scaler.inverse_transform(out_batch)
 
         out_batch = out_batch.cpu().numpy()
         y_batch = y_batch.cpu().numpy()
@@ -67,7 +67,7 @@ def predict(model, loader):
 
 
 def train_one_epoch(
-    model, trainset_loader, optimizer, scheduler, criterion, clip_grad, log=None
+    model, trainset_loader, optimizer, scheduler, criterion, clip_grad, scaler, log=None
 ):
     global cfg, global_iter_count, global_target_length
 
@@ -78,7 +78,7 @@ def train_one_epoch(
         x_batch = x_batch.to(DEVICE)
         y_batch = y_batch.to(DEVICE)
         out_batch = model(x_batch)
-        out_batch = SCALER.inverse_transform(out_batch)
+        out_batch = scaler.inverse_transform(out_batch)
 
         loss = criterion(out_batch, y_batch)
         batch_loss_list.append(loss.item())
@@ -111,6 +111,7 @@ def train(
     save=None,
 ):
     model = model.to(DEVICE)
+    # model = nn.DataParallel(model)
 
     wait = 0
     min_val_loss = np.inf
@@ -134,21 +135,24 @@ def train(
     
     # dt_list = [(datetime.strptime(dt, '%Y%m%d') + datetime.timedelta(days=i)).strftime('%Y%m%d') for i in range(110)]
     for epoch in range(max_epochs):
+        # train_total = 0
+        val_total = 0
         for dt in train_list:
             print(f"Loading {dt} data...")
-            trainset_loader = get_dt_dataloaders(dt)
+            trainset_loader, scaler = get_dt_dataloaders(dt)
             print(f"Training on {dt}...")
             train_loss = train_one_epoch(
-                model, trainset_loader, optimizer, scheduler, criterion, clip_grad, log=log
+                model, trainset_loader, optimizer, scheduler, criterion, clip_grad, scaler, log=log
             )
             print("Train Loss = %.5f" % train_loss)
             train_loss_list.append(train_loss)
             
         print("loading val data...")
         for dt in val_list:
-            val_total = 0
-            get_dt_dataloaders(dt)
-            val_total += eval_model(model, valset_loader, criterion)
+            valset_loader, valset_loader_scaler = get_dt_dataloaders(dt)
+            val_cur = eval_model(model, valset_loader, criterion, valset_loader_scaler)
+            print("Val Loss = %.5f" % val_total)
+            val_total += val_cur
         val_loss = val_total / len(val_list)
         val_loss_list.append(val_loss)
         if (epoch + 1) % verbose == 0:
@@ -171,9 +175,9 @@ def train(
             if wait >= early_stop:
                 break
 
-    model.load_state_dict(best_state_dict)
-    train_rmse, train_mae, train_mape = RMSE_MAE_MAPE(*predict(model, trainset_loader))
-    val_rmse, val_mae, val_mape = RMSE_MAE_MAPE(*predict(model, valset_loader))
+        model.load_state_dict(best_state_dict)
+        train_rmse, train_mae, train_mape = RMSE_MAE_MAPE(*predict(model, trainset_loader, scaler))
+        val_rmse, val_mae, val_mape = RMSE_MAE_MAPE(*predict(model, valset_loader, scaler))
 
     out_str = f"Early stopping at epoch: {epoch+1}\n"
     out_str += f"Best at epoch {best_epoch+1}:\n"
@@ -206,12 +210,12 @@ def train(
 
 
 @torch.no_grad()
-def test_model(model, testset_loader, log=None):
+def test_model(model, testset_loader, scaler, log=None):
     model.eval()
     print_log("--------- Test ---------", log=log)
 
     start = time.time()
-    y_true, y_pred = predict(model, testset_loader)
+    y_true, y_pred = predict(model, testset_loader, scaler)
     end = time.time()
 
     rmse_all, mae_all, mape_all = RMSE_MAE_MAPE(y_true, y_pred)
@@ -248,7 +252,8 @@ if __name__ == "__main__":
 
     GPU_ID = args.gpu_num
     os.environ["CUDA_VISIBLE_DEVICES"] = f"{GPU_ID}"
-    DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Using device: {DEVICE}")
 
     dataset = args.dataset
     dataset = dataset.upper()
@@ -262,6 +267,7 @@ if __name__ == "__main__":
     # -------------------------------- load model -------------------------------- #
 
     model = STAEformer(**cfg["model_args"])
+    # model = nn.DataParallel(model)
 
     # ------------------------------- make log file ------------------------------ #
 
@@ -291,7 +297,7 @@ if __name__ == "__main__":
     #     log=log,
     # )
     # print_log(log=log)
-    trainset_loader = get_dt_dataloaders("20240630")
+    trainset_loader, scaler = get_dt_dataloaders("20240630")
     # --------------------------- set model saving path -------------------------- #
 
     save_path = f"../saved_models/"
@@ -377,6 +383,6 @@ if __name__ == "__main__":
     test_list = dt_list[train_len + val_len:]
     print("loading test data...")
     for dt in test_list:
-        testset_loader = get_dt_dataloaders(dt)
-        test_model(model, testset_loader, log=log)
+        testset_loader, scaler = get_dt_dataloaders(dt)
+        test_model(model, testset_loader, scaler, log=log)
     log.close()

@@ -191,7 +191,10 @@ class STAEformer(nn.Module):
 
     def forward(self, x):
         # x: (batch_size, in_steps, num_nodes, input_dim+tod+dow=3)
+        
+        # add embeddings day of month, month of year
         batch_size = x.shape[0]
+        print(f"x shape: {x.shape}")
 
         if self.tod_embedding_dim > 0:
             tod = x[..., 1]
@@ -201,6 +204,7 @@ class STAEformer(nn.Module):
             dow = x[..., 2]
             print(f"dow shape: {dow.shape}")
             print(dow)
+            
         x = x[..., : self.input_dim]
 
         x = self.input_proj(x)  # (batch_size, in_steps, num_nodes, input_embedding_dim)
@@ -211,6 +215,9 @@ class STAEformer(nn.Module):
                 (tod * self.steps_per_day).long()
             )  # (batch_size, in_steps, num_nodes, tod_embedding_dim)
             print(f"tod_emb shape: {tod_emb.shape}")
+            indices = (tod * self.steps_per_day).clamp(0, self.steps_per_day - 1).long()
+            print("Embedding Indices - min:", indices.min().item(), "max:", indices.max().item())  # 检查索引范围
+
             features.append(tod_emb)
         if self.dow_embedding_dim > 0:
             dow_emb = self.dow_embedding(
@@ -230,8 +237,8 @@ class STAEformer(nn.Module):
             )
             print(f"adp_emb shape: {adp_emb.shape}")
             features.append(adp_emb)
-        # print(f"Max TOD: {tod.max()}, Min TOD: {tod.min()}")
-        # print(f"Max DOW: {dow.max()}, Min DOW: {dow.min()}")
+        print(f"Max TOD: {tod.max()}, Min TOD: {tod.min()}")
+        print(f"Max DOW: {dow.max()}, Min DOW: {dow.min()}")
         # print(features.shape)
         x = torch.cat(features, dim=-1)  # (batch_size, in_steps, num_nodes, model_dim)
 

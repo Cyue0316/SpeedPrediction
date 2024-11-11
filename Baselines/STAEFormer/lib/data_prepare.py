@@ -91,11 +91,25 @@ def get_dt_dataloaders(
     datay = read_hdfs_npy(file_path + "windowed_y.npy") # shape (288, 16326, 12, 1)
     data_x = data_x.transpose(0, 2, 1, 3)
     datay = datay.transpose(0, 2, 1, 3)
+    data_x = data_x[:, :, :250, [4, 1, 6]]
+    datay = datay[:, :, :250, :]
 
     scaler = StandardScaler(mean=data_x[..., 0].mean(), std=data_x[..., 0].std())
-
-    data_x = data_x[:, :, :, [4, 1, 6]]
     data_x[..., 0] = scaler.transform(data_x[..., 0])
+    # 获取 data_x[..., 1] 部分
+    data_x_1 = data_x[..., 1]
+
+    # 计算 min 和 max 值
+    data_min = data_x_1.min()
+    data_max = data_x_1.max()
+    data_min = 0
+    data_max = 287
+
+    # 对 data_x[..., 1] 进行手动的归一化
+    data_x_1_normalized = (data_x_1 - data_min) / (data_max - data_min)
+
+    # 将标准化后的 data_x[..., 1] 重新赋值回 data_x
+    data_x[..., 1] = data_x_1_normalized
 
     print_log(f"Train data:\tx-{data_x.shape}\ty-{datay.shape}", log=log)
 
@@ -107,8 +121,9 @@ def get_dt_dataloaders(
         dataset, batch_size=batch_size, shuffle=True
     )
 
-    return dataset_loader
+    return dataset_loader, scaler
 
+# not used
 def get_val_dataloaders(
     dt_list, batch_size=64, log=None
 ):  
