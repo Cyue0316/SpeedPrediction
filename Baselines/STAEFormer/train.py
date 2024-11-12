@@ -128,24 +128,25 @@ def train(
     train_list = dt_list[:train_len]
     val_list = dt_list[train_len:train_len + val_len]
 
-    train_loss_list = []
-    val_loss_list = []
+
     dt = "20240701"
 
-    
+    train_loss_list = []
+    val_loss_list = []
     # dt_list = [(datetime.strptime(dt, '%Y%m%d') + datetime.timedelta(days=i)).strftime('%Y%m%d') for i in range(110)]
     for epoch in range(max_epochs):
         # train_total = 0
         val_total = 0
+        train_total = 0
         for dt in train_list:
             print(f"Loading {dt} data...")
             trainset_loader, scaler = get_dt_dataloaders(dt)
             print(f"Training on {dt}...")
-            train_loss = train_one_epoch(
+            train_cur = train_one_epoch(
                 model, trainset_loader, optimizer, scheduler, criterion, clip_grad, scaler, log=log
             )
-            print("Train Loss = %.5f" % train_loss)
-            train_loss_list.append(train_loss)
+            print("Train Loss = %.5f" % train_cur)
+            train_total += train_cur
             
         print("loading val data...")
         for dt in val_list:
@@ -153,6 +154,8 @@ def train(
             val_cur = eval_model(model, valset_loader, criterion, valset_loader_scaler)
             print("Val Loss = %.5f" % val_cur)
             val_total += val_cur
+        train_loss = train_total / len(train_list)
+        train_loss_list.append(train_loss)
         val_loss = val_total / len(val_list)
         val_loss_list.append(val_loss)
         if (epoch + 1) % verbose == 0:
