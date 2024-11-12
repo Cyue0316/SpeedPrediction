@@ -14,7 +14,7 @@ didi:
   milestones: [25, 45, 65]
   lr_decay_rate: 0.1
   batch_size: 16
-  max_epochs: 1
+  max_epochs: 10
   early_stop: 10
   use_cl: False
   cl_step_size: 2500

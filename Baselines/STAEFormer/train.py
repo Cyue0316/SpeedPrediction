@@ -103,7 +103,7 @@ def train(
     scheduler,
     criterion,
     clip_grad=0,
-    max_epochs=1,
+    max_epochs=10,
     early_stop=10,
     verbose=1,
     plot=False,
@@ -151,7 +151,7 @@ def train(
         for dt in val_list:
             valset_loader, valset_loader_scaler = get_dt_dataloaders(dt)
             val_cur = eval_model(model, valset_loader, criterion, valset_loader_scaler)
-            print("Val Loss = %.5f" % val_total)
+            print("Val Loss = %.5f" % val_cur)
             val_total += val_cur
         val_loss = val_total / len(val_list)
         val_loss_list.append(val_loss)
@@ -374,7 +374,7 @@ if __name__ == "__main__":
 
     print_log(f"Saved Model: {save}", log=log)
 
-    dt_list = [(datetime.datetime.strptime(dt, '%Y%m%d') + datetime.timedelta(days=i)).strftime('%Y%m%d') for i in range(110)]
+    dt_list = [(datetime.datetime.strptime(dt, '%Y%m%d') + datetime.timedelta(days=i)).strftime('%Y%m%d') for i in range(109)]
 
     # 计算划分点
     total_len = len(dt_list)
