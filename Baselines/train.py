@@ -21,7 +21,6 @@ from lib.utils import (
 )
 from lib.metrics import RMSE_MAE_MAPE
 from lib.data_prepare import get_dt_dataloaders
-from model import STAEformer
 
 # ! X shape: (B, T, N, C)
 
@@ -35,7 +34,8 @@ def eval_model(model, valset_loader, criterion, scaler):
         y_batch = y_batch.to(DEVICE)
 
         out_batch = model(x_batch)
-        out_batch = scaler.inverse_transform(out_batch)
+        if scaler is not None:
+            out_batch = scaler.inverse_transform(out_batch)
         loss = criterion(out_batch, y_batch)
         batch_loss_list.append(loss.item())
 
@@ -53,7 +53,8 @@ def predict(model, loader, scaler):
         y_batch = y_batch.to(DEVICE)
 
         out_batch = model(x_batch)
-        out_batch = scaler.inverse_transform(out_batch)
+        if scaler is not None:
+            out_batch = scaler.inverse_transform(out_batch)
 
         out_batch = out_batch.cpu().numpy()
         y_batch = y_batch.cpu().numpy()
@@ -78,7 +79,8 @@ def train_one_epoch(
         x_batch = x_batch.to(DEVICE)
         y_batch = y_batch.to(DEVICE)
         out_batch = model(x_batch)
-        out_batch = scaler.inverse_transform(out_batch)
+        if scaler is not None:
+            out_batch = scaler.inverse_transform(out_batch)
 
         loss = criterion(out_batch, y_batch)
         batch_loss_list.append(loss.item())
@@ -97,8 +99,9 @@ def train_one_epoch(
 
 def train(
     model,
-    trainset_loader,
-    valset_loader,
+    model_name,
+    train_list,
+    val_list,
     optimizer,
     scheduler,
     criterion,
@@ -115,22 +118,7 @@ def train(
 
     wait = 0
     min_val_loss = np.inf
-    # 生成 dt_list
-    dt = "20240701"
-    dt_list = [(datetime.datetime.strptime(dt, '%Y%m%d') + datetime.timedelta(days=i)).strftime('%Y%m%d') for i in range(109)]
-
-    # 计算划分点
-    total_len = len(dt_list)
-    train_len = int(total_len * 0.6)
-    val_len = int(total_len * 0.2)
-
-    # 划分
-    train_list = dt_list[:train_len]
-    val_list = dt_list[train_len:train_len + val_len]
-
-
-    dt = "20240701"
-
+    
     train_loss_list = []
     val_loss_list = []
     # dt_list = [(datetime.strptime(dt, '%Y%m%d') + datetime.timedelta(days=i)).strftime('%Y%m%d') for i in range(110)]
@@ -140,7 +128,7 @@ def train(
         train_total = 0
         for dt in train_list:
             print(f"Loading {dt} data...")
-            trainset_loader, scaler = get_dt_dataloaders(dt)
+            trainset_loader, scaler = get_dt_dataloaders(dt, model=model_name)
             print(f"Training on {dt}...")
             train_cur = train_one_epoch(
                 model, trainset_loader, optimizer, scheduler, criterion, clip_grad, scaler, log=log
@@ -150,7 +138,7 @@ def train(
             
         print("loading val data...")
         for dt in val_list:
-            valset_loader, valset_loader_scaler = get_dt_dataloaders(dt)
+            valset_loader, valset_loader_scaler = get_dt_dataloaders(dt, model=model_name)
             val_cur = eval_model(model, valset_loader, criterion, valset_loader_scaler)
             print("Val Loss = %.5f" % val_cur)
             val_total += val_cur
@@ -245,7 +233,8 @@ if __name__ == "__main__":
     # -------------------------- set running environment ------------------------- #
     dt = '20240701'
     parser = argparse.ArgumentParser()
-    parser.add_argument("-d", "--dataset", type=str, default="pems08")
+    parser.add_argument("-m", "--model_name", type=str, default="STAEFormer")
+    parser.add_argument("-d", "--dataset", type=str, default="didi")
     parser.add_argument("-g", "--gpu_num", type=int, default=0)
     args = parser.parse_args()
 
@@ -259,64 +248,59 @@ if __name__ == "__main__":
     print(f"Using device: {DEVICE}")
 
     dataset = args.dataset
-    dataset = dataset.upper()
-    data_path = f"../data/{dataset}"
-    model_name = STAEformer.__name__
-    dataset = "didi"
-    with open(f"{model_name}.yaml", "r") as f:
+    model_name = args.model_name
+    with open(f"config.yaml", "r") as f:
         cfg = yaml.safe_load(f)
+    cfg = cfg[model_name]
     cfg = cfg[dataset]
-
-    # -------------------------------- load model -------------------------------- #
-
-    model = STAEformer(**cfg["model_args"])
-    # model = nn.DataParallel(model)
-
     # ------------------------------- make log file ------------------------------ #
 
     now = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-    log_path = f"./logs/"
+    log_path = f"./logs/{model_name}/"
     if not os.path.exists(log_path):
         os.makedirs(log_path)
     log = os.path.join(log_path, f"{model_name}-{dataset}-{now}.log")
     log = open(log, "a")
     log.seek(0)
     log.truncate()
-
-    # ------------------------------- load dataset ------------------------------- #
-
-    # dt = "20240630"
-    # print_log(dataset, log=log)
-    # (
-    #     trainset_loader,
-    #     valset_loader,
-    #     testset_loader,
-    #     SCALER,
-    # ) = get_dt_dataloaders(
-    #     dt,
-    #     tod=cfg.get("time_of_day"),
-    #     dow=cfg.get("day_of_week"),
-    #     batch_size=cfg.get("batch_size", 64),
-    #     log=log,
-    # )
-    # print_log(log=log)
-    trainset_loader, scaler = get_dt_dataloaders("20240701")
+    
     # --------------------------- set model saving path -------------------------- #
 
-    save_path = f"../saved_models/"
+    save_path = f"./saved_models/{model_name}/"
     if not os.path.exists(save_path):
         os.makedirs(save_path)
     save = os.path.join(save_path, f"{model_name}-{dataset}-{now}.pt")
+    
+    
+    # --------------------------- set train, val, test data path -------------------------- #
+    
+    # 生成 dt_list
+    dt = "20240701"
+    dt_list = [(datetime.datetime.strptime(dt, '%Y%m%d') + datetime.timedelta(days=i)).strftime('%Y%m%d') for i in range(90)]
+
+    # 计算划分点
+    total_len = len(dt_list)
+    train_len = int(total_len * 0.6)
+    val_len = int(total_len * 0.2)
+
+    # 划分
+    train_list = dt_list[:train_len]
+    val_list = dt_list[train_len:train_len + val_len]
+    test_list = dt_list[train_len + val_len:]
+    
+    # -------------------------------- load model -------------------------------- #
+    if model_name == "STAEFormer":
+        from STAEFormer.model import STAEformer
+        model = STAEformer(**cfg["model_args"])
+    elif model_name == "AR":
+        from AutoRegression.model import ARModel
+        model = ARModel(**cfg["model_args"])
+    else:
+        raise NotImplementedError
 
     # ---------------------- set loss, optimizer, scheduler ---------------------- #
 
-    if dataset in ("METRLA", "PEMSBAY"):
-        criterion = MaskedMAELoss()
-    elif dataset in ("PEMS03", "PEMS04", "PEMS07", "PEMS08"):
-        criterion = nn.HuberLoss()
-    else:
-        criterion = nn.HuberLoss()
-        # raise ValueError("Unsupported dataset.")
+    criterion = nn.HuberLoss()
 
     optimizer = torch.optim.Adam(
         model.parameters(),
@@ -331,39 +315,19 @@ if __name__ == "__main__":
         verbose=False,
     )
 
-    # --------------------------- print model structure -------------------------- #
-
-    # print_log("---------", model_name, "---------", log=log)
-    # print_log(
-    #     json.dumps(cfg, ensure_ascii=False, indent=4, cls=CustomJSONEncoder), log=log
-    # )
-    # print_log(
-    #     summary(
-    #         model,
-    #         [
-    #             cfg["batch_size"],
-    #             cfg["in_steps"],
-    #             cfg["num_nodes"],
-    #             next(iter(trainset_loader))[0].shape[-1],
-    #         ],
-    #         verbose=0,  # avoid print twice
-    #     ),
-    #     log=log,
-    # )
-    # print_log(log=log)
-
     # --------------------------- train and test model --------------------------- #
 
     print_log(f"Loss: {criterion._get_name()}", log=log)
     print_log(log=log)
 
-    # trainset_loader = None
+
     valset_loader = None
     
     model = train(
         model,
-        trainset_loader,
-        valset_loader,
+        model_name,
+        train_list,
+        val_list,
         optimizer,
         scheduler,
         criterion,
@@ -377,15 +341,9 @@ if __name__ == "__main__":
 
     print_log(f"Saved Model: {save}", log=log)
 
-    dt_list = [(datetime.datetime.strptime(dt, '%Y%m%d') + datetime.timedelta(days=i)).strftime('%Y%m%d') for i in range(109)]
 
-    # 计算划分点
-    total_len = len(dt_list)
-    train_len = int(total_len * 0.6)
-    val_len = int(total_len * 0.2)
-    test_list = dt_list[train_len + val_len:]
     print("loading test data...")
     for dt in test_list:
-        testset_loader, scaler = get_dt_dataloaders(dt)
+        testset_loader, scaler = get_dt_dataloaders(dt ,model=model_name)
         test_model(model, testset_loader, scaler, log=log)
     log.close()

@@ -198,10 +198,6 @@ class STAEformer(nn.Module):
 
         if self.tod_embedding_dim > 0:
             tod = x[..., 1]
-            # print(f"tod shape: {tod.shape}")
-            # print(tod)
-            # indices = (tod * self.steps_per_day).clamp(0, self.steps_per_day - 1).long()
-            # print("Embedding Indices - min:", indices.min().item(), "max:", indices.max().item())  # 检查索引范围
         if self.dow_embedding_dim > 0:
             dow = x[..., 2]
             
@@ -264,6 +260,3 @@ class STAEformer(nn.Module):
         return out
 
 
-# if __name__ == "__main__":
-#     model = STAEformer(207, 12, 12)
-    # summary(model, [64, 12, 207, 3])

@@ -1,5 +1,5 @@
-import STAEFormer.lib.metrics as metrics
-import STAEFormer.lib.data_prepare as data_prepare
+import lib.metrics as metrics
+import lib.data_prepare as data_prepare
 import numpy as np
 import datetime
 
@@ -12,9 +12,9 @@ val_len = int(total_len * 0.2)
 
 # 划分
 train_list = dt_list[:train_len]
-val_list = dt_list[train_len:train_len + val_len]
+val_list = dt_list[train_len:]
 with open("train_eval.txt", "w") as f:
-    for now_dt in train_list:
+    for now_dt in dt_list:
         file_path = f'hdfs://DClusterNmg3:8020/user/bigdata-dp/lvyanming/traffic_map/exp_data/sliding_data/{now_dt}/'
         data_x = data_prepare.read_hdfs_npy(file_path + "windowed_data.npy") # shape (288, 16326, 12, 8)
         data_y = data_prepare.read_hdfs_npy(file_path + "windowed_y.npy") # shape (288, 16326, 12, 1)
