@@ -5,7 +5,7 @@
 
 ### DirectlyPredict
 
-Todo
+Done
 
 ### AutoRegression
 Doing
