@@ -27,7 +27,6 @@ def get_dt_dataloaders(
     if model == 'STAEFormer':
         data_x = data_x[:, :, :400, [4, 1, 6]]
         datay = datay[:, :, :400, :]
-        print(f"Data Shape:\tx-{data_x.shape}\ty-{datay.shape}")
         # 获取 data_x[..., 1] 部分
         data_x_1 = data_x[..., 1]
 
@@ -45,11 +44,12 @@ def get_dt_dataloaders(
         scaler = StandardScaler(mean=data_x[..., 0].mean(), std=data_x[..., 0].std())
         data_x[..., 0] = scaler.transform(data_x[..., 0])
     elif model == 'AR':
-        data_x = data_x[:, :, :, :]
-        datay = datay[:, :, :, :]
-        print(f"Data Shape:\tx-{data_x.shape}\ty-{datay.shape}")
-        scaler = None
+        data_x = data_x[:, :, :1000, [4]]
+        scaler = StandardScaler(mean=data_x[..., 0].mean(), std=data_x[..., 0].std())
+        data_x[..., 0] = scaler.transform(data_x[..., 0])
+        datay = datay[:, :, :1000, :]
 
+    print(f"Data Shape:\tx-{data_x.shape}\ty-{datay.shape}")
     dataset = torch.utils.data.TensorDataset(
         torch.FloatTensor(data_x), torch.FloatTensor(datay)
     )

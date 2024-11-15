@@ -15,7 +15,7 @@ STAEFormer:
     milestones: [25, 45, 65]
     lr_decay_rate: 0.1
     batch_size: 16
-    max_epochs: 10
+    max_epochs: 15
     early_stop: 10
     use_cl: False
     cl_step_size: 2500
@@ -116,7 +116,7 @@ STAEFormer:
 
 AR:
   didi:
-    num_nodes: 16326
+    num_nodes: 1000
     in_steps: 12
     out_steps: 12
     milestones: [15, 30, 50]
@@ -125,12 +125,11 @@ AR:
 
     lr: 0.001
     batch_size: 16
-    max_epochs: 10
+    max_epochs: 20
     early_stop: 10
     use_cl: False
     cl_step_size: 2500
 
     model_args:
-      input_dim: 8
-      output_dim: 1
-      p: 3
+      p: 12
+      num_nodes: 1000

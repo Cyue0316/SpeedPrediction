@@ -194,6 +194,7 @@ def train(
         plt.ylabel("Loss")
         plt.legend()
         plt.show()
+        plt.savefig(f"epoch_loss_{model_name}.png")
 
     if save:
         torch.save(best_state_dict, save)
@@ -203,7 +204,7 @@ def train(
 @torch.no_grad()
 def test_model(model, testset_loader, scaler, log=None):
     model.eval()
-    print_log("--------- Test ---------", log=log)
+    
 
     start = time.time()
     y_true, y_pred = predict(model, testset_loader, scaler)
@@ -249,6 +250,7 @@ if __name__ == "__main__":
 
     dataset = args.dataset
     model_name = args.model_name
+    print(f"Running {model_name} on {dataset} dataset...")
     with open(f"config.yaml", "r") as f:
         cfg = yaml.safe_load(f)
     cfg = cfg[model_name]
@@ -316,7 +318,7 @@ if __name__ == "__main__":
     )
 
     # --------------------------- train and test model --------------------------- #
-
+     
     print_log(f"Loss: {criterion._get_name()}", log=log)
     print_log(log=log)
 
@@ -345,5 +347,7 @@ if __name__ == "__main__":
     print("loading test data...")
     for dt in test_list:
         testset_loader, scaler = get_dt_dataloaders(dt ,model=model_name)
+        print_log("--------- Test ---------", log=log)
+        print_log(f"Test on {dt}", log=log)
         test_model(model, testset_loader, scaler, log=log)
     log.close()
