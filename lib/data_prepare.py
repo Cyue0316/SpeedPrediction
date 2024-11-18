@@ -48,6 +48,11 @@ def get_dt_dataloaders(
         scaler = StandardScaler(mean=data_x[..., 0].mean(), std=data_x[..., 0].std())
         data_x[..., 0] = scaler.transform(data_x[..., 0])
         datay = datay[:, :, :1000, :]
+    else:
+        data_x = data_x[:, :, :, [4]]
+        scaler = StandardScaler(mean=data_x[..., 0].mean(), std=data_x[..., 0].std())
+        data_x[..., 0] = scaler.transform(data_x[..., 0])
+        datay = datay[:, :, :, :]
 
     print(f"Data Shape:\tx-{data_x.shape}\ty-{datay.shape}")
     dataset = torch.utils.data.TensorDataset(

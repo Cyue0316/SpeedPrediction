@@ -228,6 +228,7 @@ def test_model(model, testset_loader, scaler, log=None):
 
     print_log(out_str, log=log, end="")
     print_log("Inference time: %.2f s" % (end - start), log=log)
+    return rmse_all, mae_all, mape_all
 
 
 if __name__ == "__main__":
@@ -297,6 +298,12 @@ if __name__ == "__main__":
     elif model_name == "AR":
         from AutoRegression.model import ARModel
         model = ARModel(**cfg["model_args"])
+    elif model_name == "MLP":
+        from MLP.model import MLPModel
+        model = MLPModel(**cfg["model_args"])
+    elif model_name == "Linear":
+        from MLP.model import LinearModel
+        model = LinearModel(**cfg["model_args"])
     else:
         raise NotImplementedError
 
@@ -343,11 +350,18 @@ if __name__ == "__main__":
 
     print_log(f"Saved Model: {save}", log=log)
 
-
+    rmse_all, mae_all, mape_all = 0, 0, 0
     print("loading test data...")
     for dt in test_list:
         testset_loader, scaler = get_dt_dataloaders(dt ,model=model_name)
         print_log("--------- Test ---------", log=log)
         print_log(f"Test on {dt}", log=log)
-        test_model(model, testset_loader, scaler, log=log)
+        rmse_cur, mae_cur, mape_cur = test_model(model, testset_loader, scaler, log=log)
+        rmse_all += rmse_cur
+        mae_all += mae_cur
+        mape_all += mape_cur
+    rmse_all /= len(test_list)
+    mae_all /= len(test_list)
+    mape_all /= len(test_list)
+    print_log(f"AVG RMSE: {rmse_all} MAE: {mae_all} MAPE: {mape_all}", log=log)
     log.close()
