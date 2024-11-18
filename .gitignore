@@ -1,6 +1,5 @@
 
 /Baselines/AutoRegression/__pycache__
-/Baselines/logs
 /Baselines/STAEFormer/__pycache__
 /lib/__pycache__
 start_model.sh
