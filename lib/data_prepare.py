@@ -44,10 +44,10 @@ def get_dt_dataloaders(
         scaler = StandardScaler(mean=data_x[..., 0].mean(), std=data_x[..., 0].std())
         data_x[..., 0] = scaler.transform(data_x[..., 0])
     elif model == 'AR':
-        data_x = data_x[:, :, :1000, [4]]
+        data_x = data_x[:, :, :, [4]]
         scaler = StandardScaler(mean=data_x[..., 0].mean(), std=data_x[..., 0].std())
         data_x[..., 0] = scaler.transform(data_x[..., 0])
-        datay = datay[:, :, :1000, :]
+        datay = datay[:, :, :, :]
     else:
         data_x = data_x[:, :, :, [4]]
         scaler = StandardScaler(mean=data_x[..., 0].mean(), std=data_x[..., 0].std())

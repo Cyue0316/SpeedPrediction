@@ -116,7 +116,7 @@ STAEFormer:
 
 AR:
   didi:
-    num_nodes: 1000
+    num_nodes: 16326
     in_steps: 12
     out_steps: 12
     milestones: [15, 30, 50]
@@ -162,7 +162,7 @@ Linear:
     val_size: 0.2
     lr: 0.001
     batch_size: 16
-    max_epochs: 100
+    max_epochs: 20
     early_stop: 10
     use_cl: False
     cl_step_size: 2500
