@@ -169,3 +169,35 @@ Linear:
 
     model_args:
       input_dim: 1
+  
+temp:
+  didi:  
+    num_nodes: 400
+    in_steps: 12
+    out_steps: 12
+
+    train_size: 0.6
+    val_size: 0.2
+
+    lr: 0.001
+    weight_decay: 0.0015
+    milestones: [25, 45, 65]
+    lr_decay_rate: 0.1
+    batch_size: 16
+    max_epochs: 15
+    early_stop: 10
+    use_cl: False
+    cl_step_size: 2500
+
+    model_args:
+      num_nodes: 400
+      in_steps: 12
+      out_steps: 12
+      steps_per_day: 288
+      input_dim: 3
+      output_dim: 1
+      input_embedding_dim: 3
+      feed_forward_dim: 256
+      num_heads: 2
+      num_layers: 1
+      dropout: 0.1

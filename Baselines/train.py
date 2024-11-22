@@ -304,6 +304,9 @@ if __name__ == "__main__":
     elif model_name == "Linear":
         from MLP.model import LinearModel
         model = LinearModel(**cfg["model_args"])
+    elif model_name == "temp":
+        from Attention.model import AttnMLPModel
+        model = AttnMLPModel(**cfg["model_args"])
     else:
         raise NotImplementedError
 
