@@ -3,18 +3,15 @@ import torch
 
 
 
-class AttentionLayer(nn.Module):
-    """Perform attention across the -2 dim (the -1 dim is `model_dim`).
+class CrossAttentionLayer(nn.Module):
+    """Perform cross attention between query and key-value pairs.
 
-    Make sure the tensor is permuted to correct shape before attention.
+    Supports attention across the -2 dim (where -1 dim is `model_dim`).
 
     E.g.
-    - Input shape (batch_size, in_steps, num_nodes, model_dim).
-    - Then the attention will be performed across the nodes.
-
-    Also, it supports different src and tgt length.
-
-    But must `src length == K length == V length`.
+    - Input shape for `query`: (batch_size, tgt_length, num_nodes, model_dim).
+    - Input shape for `key` and `value`: (batch_size, src_length, num_nodes, model_dim).
+    - Cross attention will be performed across `num_nodes`.
 
     """
 
@@ -27,6 +24,7 @@ class AttentionLayer(nn.Module):
 
         self.head_dim = model_dim // num_heads
 
+        # Separate linear projections for query, key, and value
         self.FC_Q = nn.Linear(model_dim, model_dim)
         self.FC_K = nn.Linear(model_dim, model_dim)
         self.FC_V = nn.Linear(model_dim, model_dim)
@@ -40,52 +38,48 @@ class AttentionLayer(nn.Module):
         tgt_length = query.shape[-2]
         src_length = key.shape[-2]
 
-        query = self.FC_Q(query)
-        key = self.FC_K(key)
-        value = self.FC_V(value)
+        # Linear projections
+        query = self.FC_Q(query)  # (batch_size, ..., tgt_length, model_dim)
+        key = self.FC_K(key)      # (batch_size, ..., src_length, model_dim)
+        value = self.FC_V(value)  # (batch_size, ..., src_length, model_dim)
 
-        ##--
-        # 只取 key 和 value 的 num_nodes 维度的前 8 条
-        key = key[:, :, :8, :]
-        value = value[:, :, :8, :]
-        
-        # Qhead, Khead, Vhead (num_heads * batch_size, ..., length, head_dim)
+        # key = key[:, :, :12, :]
+        # value = value[:, :, :12, :]
+
+        # Qhead (num_heads * batch_size, ..., tgt_length, head_dim)
+        # Khead, Vhead (num_heads * batch_size, ..., src_length, head_dim)
         query = torch.cat(torch.split(query, self.head_dim, dim=-1), dim=0)
         key = torch.cat(torch.split(key, self.head_dim, dim=-1), dim=0)
         value = torch.cat(torch.split(value, self.head_dim, dim=-1), dim=0)
 
-        key = key.transpose(
-            -1, -2
-        )  # (num_heads * batch_size, ..., head_dim, src_length)
+        key = key.transpose(-1, -2)  # (num_heads * batch_size, ..., head_dim, src_length)
 
-        attn_score = (
-            query @ key
-        ) / self.head_dim**0.5  # (num_heads * batch_size, ..., tgt_length, src_length)
+        # Attention score calculation
+        attn_score = (query @ key) / self.head_dim**0.5  # (num_heads * batch_size, ..., tgt_length, src_length)
 
+        # Apply mask if required
         if self.mask:
-            mask = torch.ones(
-                tgt_length, src_length, dtype=torch.bool, device=query.device
-            ).tril()  # lower triangular part of the matrix
-            attn_score.masked_fill_(~mask, -torch.inf)  # fill in-place
+            mask = torch.ones(tgt_length, src_length, dtype=torch.bool, device=query.device).tril()
+            attn_score.masked_fill_(~mask, -torch.inf)
 
+        # Softmax and weighted sum of values
         attn_score = torch.softmax(attn_score, dim=-1)
         out = attn_score @ value  # (num_heads * batch_size, ..., tgt_length, head_dim)
-        out = torch.cat(
-            torch.split(out, batch_size, dim=0), dim=-1
-        )  # (batch_size, ..., tgt_length, head_dim * num_heads = model_dim)
+        
+        # Concatenate heads
+        out = torch.cat(torch.split(out, batch_size, dim=0), dim=-1)  # (batch_size, ..., tgt_length, model_dim)
 
+        # Final linear projection
         out = self.out_proj(out)
 
         return out
 
 
-class SelfAttentionLayer(nn.Module):
-    def __init__(
-        self, model_dim, feed_forward_dim=2048, num_heads=8, dropout=0, mask=False
-    ):
+class CrossAttentionLayerWithFeedForward(nn.Module):
+    def __init__(self, model_dim, feed_forward_dim=2048, num_heads=8, dropout=0, mask=False):
         super().__init__()
 
-        self.attn = AttentionLayer(model_dim, num_heads, mask)
+        self.cross_attn = CrossAttentionLayer(model_dim, num_heads, mask)
         self.feed_forward = nn.Sequential(
             nn.Linear(model_dim, feed_forward_dim),
             nn.ReLU(inplace=True),
@@ -96,19 +90,24 @@ class SelfAttentionLayer(nn.Module):
         self.dropout1 = nn.Dropout(dropout)
         self.dropout2 = nn.Dropout(dropout)
 
-    def forward(self, x, dim=-2):
-        x = x.transpose(dim, -2)
-        # x: (batch_size, ..., length, model_dim)
-        residual = x
-        out = self.attn(x, x, x)  # (batch_size, ..., length, model_dim)
+    def forward(self, query, key, value, dim=-2):
+        query = query.transpose(dim, -2)  # Transpose for attention
+        key = key.transpose(dim, -2)
+        value = value.transpose(dim, -2)
+
+        # Cross attention
+        residual = query
+        out = self.cross_attn(query, key, value)
         out = self.dropout1(out)
         out = self.ln1(residual + out)
 
+        # Feed-forward network
         residual = out
-        out = self.feed_forward(out)  # (batch_size, ..., length, model_dim)
+        out = self.feed_forward(out)
         out = self.dropout2(out)
         out = self.ln2(residual + out)
 
+        # Transpose back to original dimension order
         out = out.transpose(dim, -2)
         return out
     
@@ -168,27 +167,20 @@ class AttnMLPModel(nn.Module):
 
         self.attn_layers_s = nn.ModuleList(
             [
-                SelfAttentionLayer(self.model_dim, feed_forward_dim, num_heads, dropout)
+                CrossAttentionLayerWithFeedForward(self.model_dim, feed_forward_dim, num_heads, dropout)
                 for _ in range(num_layers)
             ]
         )
 
     def forward(self, x):
         # x: (batch_size, in_steps, num_nodes, input_dim)
-        # print(f"x shape: {x.shape}")
-        
         x = x[..., : self.input_dim]
-
-        x = self.input_proj(x)
+        x = self.input_proj(x)  # Project input to embedding dimension
+        kv = x[:, :, :8, :]
         for attn in self.attn_layers_s:
-            x = attn(x, dim=2)
-        # (batch_size, in_steps, num_nodes, model_dim)
+            x = attn(x, kv, kv, dim=2)  # Here, we use x as query, key, and value
 
-          # (batch_size, in_steps, num_nodes, input_embedding_dim)
-        
-        out = self.output_proj(
-            x
-        )  # (batch_size, out_steps, num_nodes, output_dim)
+        out = self.output_proj(x)  # Project back to output dimension
         return out
 
 

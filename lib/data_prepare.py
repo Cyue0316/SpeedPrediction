@@ -24,21 +24,16 @@ def get_dt_dataloaders(
     datay = datay.transpose(0, 2, 1, 3)
     # print(f"Data Shape:\tx-{data_x.shape}\ty-{datay.shape}")
     
-    if model == 'STAEFormer':
-        data_x = data_x[:, :, :400, [4, 1, 6]]
+    if model == 'STAEFormer' or model == 'DCST':
+        data_x = data_x[:, :, :400, [4, 1, 6, ]]
         datay = datay[:, :, :400, :]
-        # 获取 data_x[..., 1] 部分
-        data_x_1 = data_x[..., 1]
-
-        # 计算 min 和 max 值
-        data_min = data_x_1.min()
-        data_max = data_x_1.max()
-
+        
 
         # 对 data_x[..., 1] 进行手动的归一化
+        data_x_1 = data_x[..., 1]
+        data_min = data_x_1.min()
+        data_max = data_x_1.max()
         data_x_1_normalized = (data_x_1 - data_min) / (data_max - data_min)
-
-        # 将标准化后的 data_x[..., 1] 重新赋值回 data_x
         data_x[..., 1] = data_x_1_normalized
 
         scaler = StandardScaler(mean=data_x[..., 0].mean(), std=data_x[..., 0].std())
@@ -49,15 +44,15 @@ def get_dt_dataloaders(
         data_x[..., 0] = scaler.transform(data_x[..., 0])
         datay = datay[:, :, :, :]
     elif model == 'temp':
-        data_x = data_x[:, :, :, [4, 1, 6]]
+        data_x = data_x[:, :, :5000, [4, 1, 6, 2]]
         scaler = StandardScaler(mean=data_x[..., 0].mean(), std=data_x[..., 0].std())
         data_x[..., 0] = scaler.transform(data_x[..., 0])
-        datay = datay[:, :, :, :]
+        datay = datay[:, :, :5000, :]
     else:
-        data_x = data_x[:, :, :, [4]]
+        data_x = data_x[:, :, :10000, [4]]
         scaler = StandardScaler(mean=data_x[..., 0].mean(), std=data_x[..., 0].std())
         data_x[..., 0] = scaler.transform(data_x[..., 0])
-        datay = datay[:, :, :, :]
+        datay = datay[:, :, :10000, :]
 
     print(f"Data Shape:\tx-{data_x.shape}\ty-{datay.shape}")
     dataset = torch.utils.data.TensorDataset(
