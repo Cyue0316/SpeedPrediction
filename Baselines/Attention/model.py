@@ -43,8 +43,6 @@ class CrossAttentionLayer(nn.Module):
         key = self.FC_K(key)      # (batch_size, ..., src_length, model_dim)
         value = self.FC_V(value)  # (batch_size, ..., src_length, model_dim)
 
-        # key = key[:, :, :12, :]
-        # value = value[:, :, :12, :]
 
         # Qhead (num_heads * batch_size, ..., tgt_length, head_dim)
         # Khead, Vhead (num_heads * batch_size, ..., src_length, head_dim)
@@ -56,6 +54,7 @@ class CrossAttentionLayer(nn.Module):
 
         # Attention score calculation
         attn_score = (query @ key) / self.head_dim**0.5  # (num_heads * batch_size, ..., tgt_length, src_length)
+        print(attn_score.shape)
 
         # Apply mask if required
         if self.mask:
@@ -176,7 +175,7 @@ class AttnMLPModel(nn.Module):
         # x: (batch_size, in_steps, num_nodes, input_dim)
         x = x[..., : self.input_dim]
         x = self.input_proj(x)  # Project input to embedding dimension
-        kv = x[:, :, :8, :]
+        kv = x[:, :, :2, : self.input_dim]
         for attn in self.attn_layers_s:
             x = attn(x, kv, kv, dim=2)  # Here, we use x as query, key, and value
 

@@ -1,4 +1,0 @@
-Loss: HuberLoss
-
-2024-11-25 17:51:13.943081 Epoch 1  	Train Loss = 3.74699 Val Loss = 3.51064
-2024-11-25 19:07:08.390237 Epoch 2  	Train Loss = 3.64055 Val Loss = 3.50106

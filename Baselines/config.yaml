@@ -172,7 +172,7 @@ Linear:
   
 temp:
   didi:  
-    num_nodes: 5000
+    num_nodes: 16000
     in_steps: 12
     out_steps: 12
 
@@ -190,7 +190,7 @@ temp:
     cl_step_size: 2500
 
     model_args:
-      num_nodes: 5000
+      num_nodes: 16000
       in_steps: 12
       out_steps: 12
       steps_per_day: 288
@@ -241,3 +241,40 @@ DCST:
       num_heads: 4
       num_layers: 3
       dropout: 0.1
+
+
+GWNet:
+  didi:
+    num_nodes: 16326
+    in_steps: 12
+    out_steps: 12
+
+    train_size: 0.7
+    val_size: 0.1
+
+    time_of_day: True
+    day_of_week: True
+
+    lr: 0.001
+    weight_decay: 0.0003
+    milestones: [20,30]
+    lr_decay_rate: 0.1
+    batch_size: 16
+    max_epochs: 200
+    early_stop: 10
+    use_cl: False
+    cl_step_size: 2500
+    #clip_grad: 5
+
+    model_args:
+      num_nodes: 207
+      dropout: 0.3
+      gcn_bool: True
+      addaptadj: True
+      nhid: 32
+      in_dim: 2
+      out_dim: 12
+      kernel_size: 2
+      blocks: 4
+      layers: 2
+      adj_path: 'hdfs://DClusterNmg3:8020/user/bigdata-dp/lvyanming/traffic_map/exp_data/edge_adj.npy'

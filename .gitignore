@@ -6,3 +6,5 @@ start_model.sh
 submit.sh
 /Baselines/MLP/__pycache__
 SpeedPrediction/
+data/edge_adj.npy
+data/edge_index.npy

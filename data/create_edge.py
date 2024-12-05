@@ -1,39 +1,6 @@
-import pydoop.hdfs as hdfs
 import numpy as np
+import pydoop.hdfs as hdfs
 import pandas as pd
-
-
-def read_hdfs_file(file_path):
-    with hdfs.open(file_path, 'rt') as f:
-        lines = [line.strip().split(' ') for line in f]
-    return lines
-
-# edge_path = "hdfs://DClusterNmg3:8020/user/bigdata-dp/lvyanming/traffic_map/exp_data/link_edge/part-00000"
-# edge_df = read_hdfs_file(edge_path)
-# print(len(edge_df))
-# link_path = "hdfs://DClusterNmg3:8020/user/bigdata-dp/lvyanming/traffic_map/exp_data/final_link_range/part-00000"
-# link_list = read_hdfs_file(link_path)
-
-# # 将link_list展平为集合
-# link_set = set([link[0] for link in link_list])
-
-# # 过滤edge_df，仅保留两列都在link_set中的行
-# filtered_edge_df = [edge for edge in edge_df if edge[0] in link_set and edge[1] in link_set]
-# filtered_edge_df.sort(key=lambda x: (x[0], x[1]))
-# print(len(filtered_edge_df))
-# # 将结果保存为文件
-# output_path = "hdfs://DClusterNmg3:8020/user/bigdata-dp/lvyanming/traffic_map/exp_data/link_edge_data.txt"
-# with hdfs.open(output_path, 'wt') as f:
-#     for edge in filtered_edge_df:
-#         f.write(' '.join(edge) + '\n')
-        
-
-def build_node_mapping_from_x(x):
-
-    # 提取所有节点ID
-    node_ids = x[0, 0, :, 0].tolist()  # 从第一个batch和时间步提取节点ID，假设节点ID在所有batch中一致
-    node_mapping = {node_id: idx for idx, node_id in enumerate(node_ids)}
-    return node_mapping
 
 def read_hdfs_npy(file_path):
     with hdfs.open(file_path, 'rb') as f:
@@ -41,34 +8,54 @@ def read_hdfs_npy(file_path):
     return data
 
 
-def build_edge_index(edge_data, node_mapping):
-    """
-    根据节点映射关系将边数据转换为 NumPy 格式的 edge_index。
-    
-    参数:
-    - edge_data: 包含边的DataFrame 包含 'nodeid1' 和 'nodeid2' 列
-    - node_mapping: dict 节点ID到整数索引的映射
+def generate_edge_index(node_data, edge_text):
+    # 1. 提取节点ID
+    node_ids = node_data[0, 0, :, 0]  # 提取第一个batch第一个时间步的节点ID
+    node_ids_str = [str(int(node_id)) for node_id in node_ids]
+    # 2. 创建id到index的映射
+    id2index = {node_id: idx for idx, node_id in enumerate(node_ids_str)}
 
-    返回:
-    - edge_index: np.ndarray 形状为(2, num_edges)
-    """
-    edge_index = np.array(
-        [(node_mapping[nodeid1], node_mapping[nodeid2]) for nodeid1, nodeid2 in zip(edge_data['nodeid1'], edge_data['nodeid2'])],
-        dtype=np.int64
-    ).T
+    edge_index = []
+    with hdfs.open(edge_text, 'rt') as f:
+        for line in f:
+            idA, idB = line.strip().split(' ')
+            if idA in id2index and idB in id2index:
+                indexA = id2index[idA]
+                indexB = id2index[idB]
+                edge_index.append((indexA, indexB))
+                edge_index.append((indexB, indexA))  # 无向图添加反向边
+
+    edge_index = np.array(edge_index).T  # 转置，使形状为 (num_edges, 2)
     return edge_index
 
+def generate_adjacency_matrix(edge_index, num_nodes):
+    # 创建标准邻接矩阵
+    adj_matrix = np.zeros((num_nodes, num_nodes), dtype=int)
+    row = edge_index[0]
+    col = edge_index[1]
+    adj_matrix[row, col] = 1  # 在对应的位置上填充1，表示有边
+    return adj_matrix
 
-dt='20240701'
+
+
+dt = "20240701"
 file_path = f'hdfs://DClusterNmg3:8020/user/bigdata-dp/lvyanming/traffic_map/exp_data/sliding_data/{dt}/'
-data_x = read_hdfs_npy(file_path + "windowed_data.npy") # shape (288, 16326, 12, 8)
-edge_path = "hdfs://DClusterNmg3:8020/user/bigdata-dp/lvyanming/traffic_map/exp_data/link_edge/part-00000"
-edge_df = read_hdfs_file(edge_path)
+data_x = read_hdfs_npy(file_path + "windowed_data.npy")
+data_x = data_x.transpose(0, 2, 1, 3)
+print(data_x[0, 0, 0, 0])
+edge_text_path = "hdfs://DClusterNmg3:8020/user/bigdata-dp/lvyanming/traffic_map/exp_data/link_edge_data.txt"
+edge_data = generate_edge_index(data_x, edge_text_path)
+print("Edge data shape:", edge_data.shape)
 
-# 构建节点映射并生成 edge_index
-node_mapping = build_node_mapping_from_x(data_x)
-edge_index = build_edge_index(edge_data, node_mapping)
+# # 生成邻接矩阵
+num_nodes = data_x.shape[2]  # 计算节点数
+adj_matrix = generate_adjacency_matrix(edge_data, num_nodes)
 
-print("Node Mapping:", node_mapping)
-print("Edge Index:\n", edge_index)
-
+# 输出邻接矩阵
+print("Adjacency matrix shape:", adj_matrix.shape)
+max_node_index = max(np.max(edge_data[0]), np.max(edge_data[1]))
+print(f"Max node index: {max_node_index}")
+print(f"Number of nodes: {num_nodes}")
+# print(adj_matrix)
+# np.save("edge_index.npy", edge_data)
+# np.save("edge_adj.npy", adj_matrix)

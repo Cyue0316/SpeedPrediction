@@ -310,6 +310,10 @@ if __name__ == "__main__":
     elif model_name == "DCST":
         from DCST.model import DCST
         model = DCST(**cfg["model_args"])
+    elif model_name == "GWNet":
+        from GWNet.model import GWNet
+        model = GWNet(**cfg["model_args"])
+        
     else:
         raise NotImplementedError
 
