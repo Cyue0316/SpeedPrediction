@@ -20,7 +20,7 @@ from lib.utils import (
     CustomJSONEncoder,
 )
 from lib.metrics import RMSE_MAE_MAPE
-from lib.data_prepare import get_dt_dataloaders
+from lib.data_prepare import get_dt_dataloaders, get_edge_data_loader
 
 # ! X shape: (B, T, N, C)
 
@@ -311,9 +311,8 @@ if __name__ == "__main__":
         from DCST.model import DCST
         model = DCST(**cfg["model_args"])
     elif model_name == "GWNet":
-        from GWNet.model import GWNet
-        model = GWNet(**cfg["model_args"])
-        
+        from GWNet.model import gwnet
+        model = gwnet(**cfg["model_args"])
     else:
         raise NotImplementedError
 

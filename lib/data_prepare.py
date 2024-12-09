@@ -53,10 +53,13 @@ def get_dt_dataloaders(
         data_x[..., 0] = scaler.transform(data_x[..., 0])
         datay = datay[:, :, :16000, :]
     elif model == 'GWNet':
-        data_x = data_x[:, :, :, [4, 1, 6, 2]]
+        data_x = data_x[:, :, :6000, [4]]
         scaler = StandardScaler(mean=data_x[..., 0].mean(), std=data_x[..., 0].std())
         data_x[..., 0] = scaler.transform(data_x[..., 0])
-        datay = datay[:, :, :, :]
+        datay = datay[:, :, :6000, :]
+        batch_size = 32
+        # data_x = data_x.transpose(0, 3, 2, 1)
+        # datay = datay.transpose(0, 3, 2, 1)
     else:
         data_x = data_x[:, :, :10000, [4]]
         scaler = StandardScaler(mean=data_x[..., 0].mean(), std=data_x[..., 0].std())
@@ -123,11 +126,13 @@ def get_val_dataloaders(
 #------------------Graph Data Loader------------------#
 def get_edge_data_loader(edge_path):
     with hdfs.open(edge_path, 'rb') as f:
-        adj = coo_matrix(np.load(f))
-    
+        adj = np.load(f)
+    edge_index = torch.tensor(adj, dtype=torch.long)
+    print(edge_index.shape)
+    # adj = adj[:500, :500]
     # adj = [asym_adj(adj), asym_adj(np.transpose(adj))]
     # adj_matrix = asym_adj(adj)
-    return adj
+    return edge_index
 
 
 def sym_adj(adj):

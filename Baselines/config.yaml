@@ -245,7 +245,7 @@ DCST:
 
 GWNet:
   didi:
-    num_nodes: 16326
+    num_nodes: 6000
     in_steps: 12
     out_steps: 12
 
@@ -267,14 +267,6 @@ GWNet:
     #clip_grad: 5
 
     model_args:
-      num_nodes: 207
-      dropout: 0.3
+      num_nodes: 6000
       gcn_bool: True
       addaptadj: True
-      nhid: 32
-      in_dim: 2
-      out_dim: 12
-      kernel_size: 2
-      blocks: 4
-      layers: 2
-      adj_path: 'hdfs://DClusterNmg3:8020/user/bigdata-dp/lvyanming/traffic_map/exp_data/edge_adj.npy'
