@@ -52,7 +52,12 @@ def get_dt_dataloaders(
         scaler = StandardScaler(mean=data_x[..., 0].mean(), std=data_x[..., 0].std())
         data_x[..., 0] = scaler.transform(data_x[..., 0])
         datay = datay[:, :, :16000, :]
-    elif model == 'GWNet':
+    elif model == 'AGCRN':
+        data_x = data_x[:, :, :1000, [4]]
+        scaler = StandardScaler(mean=data_x[..., 0].mean(), std=data_x[..., 0].std())
+        data_x[..., 0] = scaler.transform(data_x[..., 0])
+        datay = datay[:, :, :1000, :]
+    elif model == 'GWNet' or model == 'SAGE':
         data_x = data_x[:, :, :6000, [4]]
         scaler = StandardScaler(mean=data_x[..., 0].mean(), std=data_x[..., 0].std())
         data_x[..., 0] = scaler.transform(data_x[..., 0])
@@ -127,12 +132,13 @@ def get_val_dataloaders(
 def get_edge_data_loader(edge_path):
     with hdfs.open(edge_path, 'rb') as f:
         adj = np.load(f)
-    edge_index = torch.tensor(adj, dtype=torch.long)
-    print(edge_index.shape)
-    # adj = adj[:500, :500]
+    # edge_index = torch.tensor(adj, dtype=torch.long)
+    # print(edge_index.shape)
+    adj = adj[:6000, :6000]
     # adj = [asym_adj(adj), asym_adj(np.transpose(adj))]
+    adj = [adj, np.transpose(adj)]
     # adj_matrix = asym_adj(adj)
-    return edge_index
+    return adj
 
 
 def sym_adj(adj):
@@ -145,12 +151,13 @@ def sym_adj(adj):
     return adj.dot(d_mat_inv_sqrt).transpose().dot(d_mat_inv_sqrt).astype(np.float32).todense()
 
 def asym_adj(adj):
-    adj = sp.coo_matrix(adj)
-    rowsum = np.array(adj.sum(1)).flatten()
-    d_inv = np.power(rowsum, -1).flatten()
-    d_inv[np.isinf(d_inv)] = 0.
-    d_mat= sp.diags(d_inv)
-    return d_mat.dot(adj).astype(np.float32).todense()
+    adj = sp.coo_matrix(adj, dtype=np.float32)  # 确保输入为稀疏矩阵且类型为浮点数
+    rowsum = np.array(adj.sum(1)).flatten().astype(np.float32)  # 计算每行的度并转换为浮点数
+    d_inv = np.zeros_like(rowsum, dtype=np.float32)  # 初始化倒数向量
+    nonzero_mask = rowsum > 0  # 找出非零度的行
+    d_inv[nonzero_mask] = np.power(rowsum[nonzero_mask], -1)  # 仅计算非零度的倒数
+    d_mat = sp.diags(d_inv)  # 构造对角矩阵
+    return d_mat.dot(adj).astype(np.float32).todense()  # 计算并返回标准化矩阵
 
 def calculate_normalized_laplacian(adj):
     """

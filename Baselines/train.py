@@ -313,6 +313,12 @@ if __name__ == "__main__":
     elif model_name == "GWNet":
         from GWNet.model import gwnet
         model = gwnet(**cfg["model_args"])
+    elif model_name == "AGCRN":
+        from AGCRN.model import AGCRN
+        model = AGCRN(**cfg["model_args"])
+    elif model_name == "SAGE":
+        from SAGE.model import gwnet_sage
+        model = gwnet_sage(**cfg["model_args"])
     else:
         raise NotImplementedError
 
