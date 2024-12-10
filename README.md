@@ -8,7 +8,7 @@
 Done
 
 ### AutoRegression
-Doing
+Done, Max node num: 16326
 
 ### MLP
 Done, Max node num: 16326
@@ -16,8 +16,8 @@ Done, Max node num: 16326
 ### STAEFromer(Transformer based)
 Done, Max node num: 400
 
-### GraphSAGE(GNN based)
-Todo
+### GraphWaveNet(GNN based)
+doing
 
 ## Result
 
