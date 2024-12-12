@@ -260,7 +260,7 @@ GWNet:
     milestones: [20,30]
     lr_decay_rate: 0.1
     batch_size: 16
-    max_epochs: 200
+    max_epochs: 20
     early_stop: 10
     use_cl: False
     cl_step_size: 2500
@@ -268,7 +268,6 @@ GWNet:
 
     model_args:
       num_nodes: 6000
-      adj_path: "hdfs://DClusterNmg3:8020/user/bigdata-dp/lvyanming/traffic_map/exp_data/edge_adj.npy"
       gcn_bool: True
       addaptadj: True
 
@@ -320,7 +319,7 @@ AGCRN:
     milestones: [20,30]
     lr_decay_rate: 0.1
     batch_size: 16
-    max_epochs: 200
+    max_epochs: 20
     early_stop: 10
     use_cl: False
     cl_step_size: 2500
@@ -333,3 +332,42 @@ AGCRN:
       rnn_units: 64
       num_layers: 2
       cheb_k: 2
+
+
+STID:
+  didi:
+    num_nodes: 16326
+    in_steps: 12
+    out_steps: 12
+
+    train_size: 0.7
+    val_size: 0.1
+
+    time_of_day: True
+    day_of_week: True
+
+    lr: 0.001
+    weight_decay: 0.0003
+    milestones: [20,30]
+    lr_decay_rate: 0.1
+    batch_size: 16
+    max_epochs: 20
+    early_stop: 10
+    use_cl: False
+    cl_step_size: 2500
+    
+    model_args:
+      num_nodes: 16326
+      input_len: 12
+      input_dim: 3
+      embed_dim: 32
+      output_len: 12
+      num_layer: 3
+      if_node: True
+      node_dim: 32
+      if_T_i_D: True
+      if_D_i_W: True
+      temp_dim_tid: 32
+      temp_dim_diw: 32
+      time_of_day_size: 288
+      day_of_week_size: 7

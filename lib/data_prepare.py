@@ -42,6 +42,18 @@ def get_dt_dataloaders(
 
         scaler = StandardScaler(mean=data_x[..., 0].mean(), std=data_x[..., 0].std())
         data_x[..., 0] = scaler.transform(data_x[..., 0])
+    elif model == 'STID':
+        data_x = data_x[:, :, :, [4, 1, 6]]
+        datay = datay[:, :, :, :]
+        # 对 data_x[..., 1] 进行手动的归一化
+        # data_x_1 = data_x[..., 1]
+        # data_min = data_x_1.min()
+        # data_max = data_x_1.max()
+        # data_x_1_normalized = (data_x_1 - data_min) / (data_max - data_min)
+        # data_x[..., 1] = data_x_1_normalized
+        scaler = StandardScaler(mean=data_x[..., 0].mean(), std=data_x[..., 0].std())
+        data_x[..., 0] = scaler.transform(data_x[..., 0])
+        # batch_size = 32
     elif model == 'AR':
         data_x = data_x[:, :, :, [4]]
         scaler = StandardScaler(mean=data_x[..., 0].mean(), std=data_x[..., 0].std())
@@ -57,6 +69,7 @@ def get_dt_dataloaders(
         scaler = StandardScaler(mean=data_x[..., 0].mean(), std=data_x[..., 0].std())
         data_x[..., 0] = scaler.transform(data_x[..., 0])
         datay = datay[:, :, :1000, :]
+        batch_size = 32
     elif model == 'GWNet' or model == 'SAGE':
         data_x = data_x[:, :, :6000, [4]]
         scaler = StandardScaler(mean=data_x[..., 0].mean(), std=data_x[..., 0].std())

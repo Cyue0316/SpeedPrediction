@@ -319,6 +319,9 @@ if __name__ == "__main__":
     elif model_name == "SAGE":
         from SAGE.model import gwnet_sage
         model = gwnet_sage(**cfg["model_args"])
+    elif model_name == "STID":
+        from STID.model import STID
+        model = STID(**cfg["model_args"])
     else:
         raise NotImplementedError
 
