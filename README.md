@@ -25,6 +25,9 @@ Done, Max node num: 1000
 ### STID(MLP based)
 Done, Max node num: 16326
 
+### PatchSTG(Attention based)
+doing
+
 ## Result
 
 | **MODEL** | **MAX NODE** | **RMSE** | **MAE** | **MAPE** | **RUNTIME** |
@@ -39,4 +42,4 @@ Done, Max node num: 16326
 | **GWNet-A**(20 epoch, 90 days) | 6000 | 2.32365 | 1.29388 | 15.68172 | 27h |
 | **AGCRN**(20 epoch, 90 days) | 1000 | 2.43474 | 1.40190 | 17.60328 | 16.1h |
 | **STID**(20 epoch, 90 days) | 16326 | 2.53644 | 1.46874 | 18.31219 | 17.2h |
-
+| **PatchSTG**(20 epoch, 90 days) | 16326 |  |  |  |  |

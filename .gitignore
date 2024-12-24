@@ -8,3 +8,8 @@ submit.sh
 SpeedPrediction/
 data/edge_adj.npy
 data/edge_index.npy
+.DS_Store
+data/dis_adj.npy
+/Baselines/saved_models
+/Baselines/PatchSTG/__pycache__
+/Baselines/SAGE/__pycache__

@@ -46,6 +46,7 @@ class CrossAttentionLayer(nn.Module):
 
         # Qhead (num_heads * batch_size, ..., tgt_length, head_dim)
         # Khead, Vhead (num_heads * batch_size, ..., src_length, head_dim)
+        print(query.shape)
         query = torch.cat(torch.split(query, self.head_dim, dim=-1), dim=0)
         key = torch.cat(torch.split(key, self.head_dim, dim=-1), dim=0)
         value = torch.cat(torch.split(value, self.head_dim, dim=-1), dim=0)
@@ -111,21 +112,21 @@ class CrossAttentionLayerWithFeedForward(nn.Module):
         return out
     
     
-class MLP(nn.Module):
-    def __init__(self, hidden_dim=64):
-        super(MLP, self).__init__()
-        self.mlp = nn.Sequential(
-            nn.Linear(1, hidden_dim), 
-            nn.ReLU(),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, 1) 
-        )
+# class MLP(nn.Module):
+#     def __init__(self, hidden_dim=64):
+#         super(MLP, self).__init__()
+#         self.mlp = nn.Sequential(
+#             nn.Linear(1, hidden_dim), 
+#             nn.ReLU(),
+#             nn.Linear(hidden_dim, hidden_dim),
+#             nn.ReLU(),
+#             nn.Linear(hidden_dim, 1) 
+#         )
 
-    def forward(self, x):
-        # x 的维度是 (B, T, N, 1)
-        x = self.mlp(x)
-        return x
+#     def forward(self, x):
+#         # x 的维度是 (B, T, N, 1)
+#         x = self.mlp(x)
+#         return x
 
 
 class AttnMLPModel(nn.Module):

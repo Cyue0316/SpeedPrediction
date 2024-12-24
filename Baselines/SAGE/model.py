@@ -1,212 +1,170 @@
-from lib.data_prepare import get_edge_data_loader
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
-from torch_geometric.nn import SAGEConv
-from torch.nn import Conv1d
+from torch import nn
+import torch.functional as F
+from lib.data_prepare import get_edge_data_loader
 
+class GCNLayer(nn.Module):
+    """带残差连接的 Graph Convolutional Network (GCN) 层"""
 
-
-class graph_sage(torch.nn.Module):
-    def __init__(self, c_in, c_out, dropout, support_len=3, order=2):
+    def __init__(self, input_dim, output_dim):
         """
         Args:
-            c_in (int): 输入特征维度
-            c_out (int): 输出特征维度
-            dropout (float): Dropout率
-            support_len (int): 支持的邻接矩阵个数
-            order (int): 图卷积传播的阶数
+            input_dim (int): 输入特征的维度。
+            output_dim (int): 输出特征的维度。
         """
-        super(graph_sage, self).__init__()
-        self.convs = torch.nn.ModuleList()
-        self.order = order
-        self.dropout = dropout
+        super(GCNLayer, self).__init__()
+        self.linear = nn.Linear(input_dim, output_dim, bias=False)  # 图卷积的线性变换
+        self.act = nn.ReLU()
+        self.dropout = nn.Dropout(p=0.15)
 
-        # 构建多个GraphSAGE卷积层，每个邻接矩阵一个
-        for _ in range(support_len):
-            layers = torch.nn.ModuleList()
-            for k in range(order):
-                layers.append(SAGEConv(c_in if k == 0 else c_out, c_out))
-            self.convs.append(layers)
+        # 如果输入输出维度不一致，添加一个映射层
+        self.residual = nn.Linear(input_dim, output_dim, bias=False) if input_dim != output_dim else nn.Identity()
 
-    def forward(self, x, edge_index_list):
+    def forward(self, x, edge_index):
         """
         Args:
-            x (Tensor): 节点特征 [batch_size * num_nodes, c_in]
-            edge_index_list (List[Tensor]): 邻接矩阵列表 每个Tensor形状为[2, num_edges]
+            x (torch.Tensor): 节点特征矩阵，形状为 [B, D, N, 1]。
+            edge_index (torch.Tensor): 图的邻接矩阵，形状为 [N, N]。
 
         Returns:
-            Tensor: 节点嵌入 [batch_size * num_nodes, c_out]
+            torch.Tensor: 更新后的节点特征，形状为 [B, D_out, N, 1]。
         """
-        out = [x]
-        for i, edge_index in enumerate(edge_index_list):
-            h = x
-            for conv in self.convs[i]:
-                h = conv(h, edge_index)
-                h = F.relu(h)
-                h = F.dropout(h, p=self.dropout, training=self.training)
-            out.append(h)
+        B, D, N, _ = x.shape
+        adj = edge_index  # 邻接矩阵
 
-        # 将来自不同邻接矩阵的特征拼接
-        h = torch.cat(out, dim=1)
-        return h
+        # 对邻接矩阵进行归一化：D^{-1/2} * A * D^{-1/2}
+        I = torch.eye(N, device=x.device)  # 单位矩阵
+        adj = adj + I  # 加上自环
+        D = torch.diag(torch.pow(adj.sum(dim=1), -0.5))  # 计算度矩阵 D^{-1/2}
+        adj = torch.mm(torch.mm(D, adj), D)  # 归一化邻接矩阵
 
+        # GCN 卷积操作
+        x = x.squeeze(-1).permute(0, 2, 1)  # 形状变为 [B, N, D]
+        out = torch.matmul(adj, self.linear(x))  # 图卷积
+        out = out.permute(0, 2, 1).unsqueeze(-1)  # 恢复形状为 [B, D_out, N, 1]
 
-class gwnet_sage(nn.Module):
-    def __init__(self, num_nodes, adj_path=None, dropout=0.3, supports=None, gcn_bool=True, addaptadj=True, aptinit=None, in_dim=1,out_dim=12,residual_channels=32,dilation_channels=32,skip_channels=256,end_channels=512,kernel_size=2,blocks=4,layers=2):
-        super(gwnet_sage, self).__init__()
-        self.dropout = dropout
-        self.blocks = blocks
-        self.layers = layers
-        self.gcn_bool = gcn_bool
-        self.addaptadj = addaptadj
+        # 残差连接
+        res = self.residual(x.permute(0, 2, 1).unsqueeze(-1))  # [B, D_out, N, 1]
+        out = self.dropout(self.act(out + res))  # 激活函数 + Dropout
+        return out
 
-        self.filter_convs = nn.ModuleList()
-        self.gate_convs = nn.ModuleList()
-        self.residual_convs = nn.ModuleList()
-        self.skip_convs = nn.ModuleList()
-        self.bn = nn.ModuleList()
-        self.gconv = nn.ModuleList()
+    
+    
+class STID(nn.Module):
+    """
+    Paper: Spatial-Temporal Identity: A Simple yet Effective Baseline for Multivariate Time Series Forecasting
+    Link: https://arxiv.org/abs/2208.05233
+    Official Code: https://github.com/zezhishao/STID
+    """
 
-        self.start_conv = nn.Conv2d(in_channels=in_dim,
-                                    out_channels=residual_channels,
-                                    kernel_size=(1,1))
-        if adj_path is not None:
-            self.supports = get_edge_data_loader(adj_path)
+    def __init__(self, num_nodes, node_dim, input_len, input_dim, embed_dim, output_len, num_layer, if_node, if_T_i_D, if_D_i_W, temp_dim_tid, temp_dim_diw, time_of_day_size, day_of_week_size):
+        super().__init__()
+        # attributes
+        self.num_nodes = num_nodes
+        self.node_dim = node_dim
+        self.input_len = input_len
+        self.input_dim = input_dim
+        self.embed_dim = embed_dim
+        self.output_len = output_len
+        self.num_layer = num_layer
+        self.temp_dim_tid = temp_dim_tid
+        self.temp_dim_diw = temp_dim_diw
+        self.time_of_day_size = time_of_day_size
+        self.day_of_week_size = day_of_week_size
 
-        receptive_field = 1
+        self.if_time_in_day = if_T_i_D
+        self.if_day_in_week = if_D_i_W
+        self.if_spatial = if_node
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.edge_index = get_edge_data_loader()
 
-        self.supports_len = 0
-        if supports is not None:
-            self.supports_len += len(supports)
+        # spatial embeddings
+        if self.if_spatial:
+            self.node_emb = nn.Parameter(
+                torch.empty(self.num_nodes, self.node_dim))
+            nn.init.xavier_uniform_(self.node_emb)
+        # temporal embeddings
+        if self.if_time_in_day:
+            self.time_in_day_emb = nn.Parameter(
+                torch.empty(self.time_of_day_size, self.temp_dim_tid))
+            nn.init.xavier_uniform_(self.time_in_day_emb)
+        if self.if_day_in_week:
+            self.day_in_week_emb = nn.Parameter(
+                torch.empty(self.day_of_week_size, self.temp_dim_diw))
+            nn.init.xavier_uniform_(self.day_in_week_emb)
 
-        if gcn_bool and addaptadj:
-            if aptinit is None:
-                if supports is None:
-                    self.supports = []
-                self.nodevec1 = nn.Parameter(torch.randn(num_nodes, 10), requires_grad=True)
-                self.nodevec2 = nn.Parameter(torch.randn(10, num_nodes), requires_grad=True)
-                self.supports_len +=1
-            else:
-                if supports is None:
-                    self.supports = []
-                m, p, n = torch.svd(aptinit)
-                initemb1 = torch.mm(m[:, :10], torch.diag(p[:10] ** 0.5))
-                initemb2 = torch.mm(torch.diag(p[:10] ** 0.5), n[:, :10].t())
-                self.nodevec1 = nn.Parameter(initemb1, requires_grad=True)
-                self.nodevec2 = nn.Parameter(initemb2, requires_grad=True)
-                self.supports_len += 1
+        # embedding layer
+        self.time_series_emb_layer = nn.Conv2d(
+            in_channels=self.input_dim * self.input_len, out_channels=self.embed_dim, kernel_size=(1, 1), bias=True)
 
+        # encoding
+        self.hidden_dim = self.embed_dim+self.node_dim * \
+            int(self.if_spatial)+self.temp_dim_tid*int(self.if_day_in_week) + \
+            self.temp_dim_diw*int(self.if_time_in_day)
+        self.encoder = nn.Sequential(
+            *[GCNLayer(self.hidden_dim, self.hidden_dim) for _ in range(self.num_layer)]
+        )
 
+        # regression
+        self.regression_layer = nn.Conv2d(
+            in_channels=self.hidden_dim, out_channels=self.output_len, kernel_size=(1, 1), bias=True)
 
+    def forward(self, history_data: torch.Tensor) -> torch.Tensor:
+        """Feed forward of STID.
 
-        for b in range(blocks):
-            additional_scope = kernel_size - 1
-            new_dilation = 1
-            for i in range(layers):
-                # dilated convolutions
-                self.filter_convs.append(nn.Conv2d(in_channels=residual_channels,
-                                                   out_channels=dilation_channels,
-                                                   kernel_size=(1,kernel_size),dilation=new_dilation))
+        Args:
+            history_data (torch.Tensor): history data with shape [B, L, N, C]
 
-                self.gate_convs.append(nn.Conv2d(in_channels=residual_channels,
-                                                 out_channels=dilation_channels,
-                                                 kernel_size=(1, kernel_size), dilation=new_dilation))
+        Returns:
+            torch.Tensor: prediction with shape [B, L, N, C]
+        """
 
-                # 1x1 convolution for residual connection
-                self.residual_convs.append(nn.Conv2d(in_channels=dilation_channels,
-                                                     out_channels=residual_channels,
-                                                     kernel_size=(1, 1)))
+        # prepare data
+        input_data = history_data[..., range(self.input_dim)]
 
-                # 1x1 convolution for skip connection
-                self.skip_convs.append(nn.Conv2d(in_channels=dilation_channels,
-                                                 out_channels=skip_channels,
-                                                 kernel_size=(1, 1)))
-                self.bn.append(nn.BatchNorm2d(residual_channels))
-                new_dilation *=2
-                receptive_field += additional_scope
-                additional_scope *= 2
-                if self.gcn_bool:
-                    self.gconv.append(graph_sage(dilation_channels,residual_channels,dropout,support_len=self.supports_len))
-
-
-
-        self.end_conv_1 = nn.Conv2d(in_channels=skip_channels,
-                                  out_channels=end_channels,
-                                  kernel_size=(1,1),
-                                  bias=True)
-
-        self.end_conv_2 = nn.Conv2d(in_channels=end_channels,
-                                    out_channels=out_dim,
-                                    kernel_size=(1,1),
-                                    bias=True)
-
-        self.receptive_field = receptive_field
-
-
-
-    def forward(self, input):
-        input = input.permute((0, 3, 2, 1))
-        in_len = input.size(3)
-        if in_len<self.receptive_field:
-            x = nn.functional.pad(input,(self.receptive_field-in_len,0,0,0))
+        if self.if_time_in_day:
+            t_i_d_data = history_data[..., 1]
+            # In the datasets used in STID, the time_of_day feature is normalized to [0, 1]. We multiply it by 288 to get the index.
+            # If you use other datasets, you may need to change this line.
+            # time_in_day_emb = self.time_in_day_emb[(t_i_d_data[:, -1, :] * self.time_of_day_size).type(torch.LongTensor)]
+            time_in_day_emb = self.time_in_day_emb[(t_i_d_data[:, -1, :]).type(torch.LongTensor)]
         else:
-            x = input
-        x = self.start_conv(x)
-        skip = 0
+            time_in_day_emb = None
+        if self.if_day_in_week:
+            d_i_w_data = history_data[..., 2]
+            # day_in_week_emb = self.day_in_week_emb[(d_i_w_data[:, -1, :] * self.day_of_week_size).type(torch.LongTensor)]
+            day_in_week_emb = self.day_in_week_emb[(d_i_w_data[:, -1, :]).type(torch.LongTensor)]
+        else:
+            day_in_week_emb = None
 
-        # calculate the current adaptive adj matrix once per iteration
-        new_supports = None
-        if self.gcn_bool and self.addaptadj and self.supports is not None:
-            adp = F.softmax(F.relu(torch.mm(self.nodevec1, self.nodevec2)), dim=1)
-            new_supports = self.supports + [adp]
+        # time series embedding
+        batch_size, _, num_nodes, _ = input_data.shape
+        input_data = input_data.transpose(1, 2).contiguous()
+        input_data = input_data.view(
+            batch_size, num_nodes, -1).transpose(1, 2).unsqueeze(-1)
+        time_series_emb = self.time_series_emb_layer(input_data)
 
-        # WaveNet layers
-        for i in range(self.blocks * self.layers):
+        node_emb = []
+        if self.if_spatial:
+            # expand node embeddings
+            node_emb.append(self.node_emb.unsqueeze(0).expand(
+                batch_size, -1, -1).transpose(1, 2).unsqueeze(-1))
+        # temporal embeddings
+        tem_emb = []
+        if time_in_day_emb is not None:
+            tem_emb.append(time_in_day_emb.transpose(1, 2).unsqueeze(-1))
+        if day_in_week_emb is not None:
+            tem_emb.append(day_in_week_emb.transpose(1, 2).unsqueeze(-1))
 
-            #            |----------------------------------------|     *residual*
-            #            |                                        |
-            #            |    |-- conv -- tanh --|                |
-            # -> dilate -|----|                  * ----|-- 1x1 -- + -->	*input*
-            #                 |-- conv -- sigm --|     |
-            #                                         1x1
-            #                                          |
-            # ---------------------------------------> + ------------->	*skip*
+        # concate all embeddings
+        hidden = torch.cat([time_series_emb] + node_emb + tem_emb, dim=1)
+        print(hidden.shape)
+        # encoding
+        edge_index = torch.tensor(self.edge_index, dtype=torch.float32).to(self.device)  # 邻接矩阵
+        for layer in self.encoder:
+            hidden = layer(hidden, edge_index)
 
-            #(dilation, init_dilation) = self.dilations[i]
+        # regression
+        prediction = self.regression_layer(hidden)
 
-            #residual = dilation_func(x, dilation, init_dilation, i)
-            residual = x
-            # dilated convolution
-            filter = self.filter_convs[i](residual)
-            filter = torch.tanh(filter)
-            gate = self.gate_convs[i](residual)
-            gate = torch.sigmoid(gate)
-            x = filter * gate
-
-            # parametrized skip connection
-
-            s = x
-            s = self.skip_convs[i](s)
-            try:
-                skip = skip[:, :, :,  -s.size(3):]
-            except:
-                skip = 0
-            skip = s + skip
-
-
-            if self.gcn_bool and self.supports is not None:
-                if self.addaptadj:
-                    x = self.gconv[i](x, new_supports)
-                else:
-                    x = self.gconv[i](x,self.supports)
-            else:
-                x = self.residual_convs[i](x)
-
-            x = x + residual[:, :, :, -x.size(3):]
-
-            x = self.bn[i](x)
-        x = F.relu(skip)
-        x = F.relu(self.end_conv_1(x))
-        x = self.end_conv_2(x)
-        return x
+        return prediction

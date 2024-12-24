@@ -170,9 +170,9 @@ Linear:
     model_args:
       input_dim: 1
   
-temp:
+Attention:
   didi:  
-    num_nodes: 16000
+    num_nodes: 16326
     in_steps: 12
     out_steps: 12
 
@@ -190,13 +190,13 @@ temp:
     cl_step_size: 2500
 
     model_args:
-      num_nodes: 16000
+      num_nodes: 16326
       in_steps: 12
       out_steps: 12
       steps_per_day: 288
-      input_dim: 4
+      input_dim: 3
       output_dim: 1
-      input_embedding_dim: 4
+      input_embedding_dim: 3
       feed_forward_dim: 256
       num_heads: 4
       num_layers: 3
@@ -274,7 +274,7 @@ GWNet:
 
 SAGE:
   didi:
-    num_nodes: 600
+    num_nodes: 16326
     in_steps: 12
     out_steps: 12
 
@@ -289,17 +289,26 @@ SAGE:
     milestones: [20,30]
     lr_decay_rate: 0.1
     batch_size: 16
-    max_epochs: 200
+    max_epochs: 20
     early_stop: 10
     use_cl: False
     cl_step_size: 2500
-    #clip_grad: 5
-
+    
     model_args:
-      num_nodes: 600
-      adj_path: "hdfs://DClusterNmg3:8020/user/bigdata-dp/lvyanming/traffic_map/exp_data/edge_adj.npy"
-      gcn_bool: True
-      addaptadj: True
+      num_nodes: 16326
+      input_len: 12
+      input_dim: 3
+      embed_dim: 32
+      output_len: 12
+      num_layer: 1
+      if_node: True
+      node_dim: 32
+      if_T_i_D: True
+      if_D_i_W: True
+      temp_dim_tid: 32
+      temp_dim_diw: 32
+      time_of_day_size: 288
+      day_of_week_size: 7
 
 
 AGCRN:
@@ -371,3 +380,40 @@ STID:
       temp_dim_diw: 32
       time_of_day_size: 288
       day_of_week_size: 7
+
+PatchSTG:
+  didi:
+    num_nodes: 16326
+    in_steps: 12
+    out_steps: 12
+
+    train_size: 0.7
+    val_size: 0.1
+
+    time_of_day: True
+    day_of_week: True
+
+    lr: 0.002
+    weight_decay: 0.0001
+    milestones: [20,30]
+    lr_decay_rate: 0.1
+    batch_size: 8
+    max_epochs: 20
+    early_stop: 10
+    use_cl: False
+    cl_step_size: 2500
+    
+    model_args:
+      factors: 8
+      layers: 5
+      tem_patchsize: 12
+      tem_patchnum: 1
+      spa_patchsize: 4
+      spa_patchnum: 4096
+      node_num: 16326
+      tod: 288
+      dow: 7
+      input_dims: 64
+      node_dims: 32
+      tod_dims: 32
+      dow_dims: 32

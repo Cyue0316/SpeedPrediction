@@ -1,0 +1,16 @@
+Loss: HuberLoss
+
+2024-12-23 14:33:34.326077 Epoch 1  	Train Loss = 0.97693 Val Loss = 0.92314
+2024-12-23 16:08:24.654064 Epoch 2  	Train Loss = 0.88488 Val Loss = 0.91694
+2024-12-23 17:42:09.981743 Epoch 3  	Train Loss = 0.87764 Val Loss = 0.90881
+2024-12-23 19:11:40.735868 Epoch 4  	Train Loss = 0.86916 Val Loss = 0.89883
+2024-12-23 20:44:29.791798 Epoch 5  	Train Loss = 0.85845 Val Loss = 0.88734
+2024-12-23 22:14:16.844324 Epoch 6  	Train Loss = 0.84735 Val Loss = 0.87588
+2024-12-23 23:36:19.717833 Epoch 7  	Train Loss = 0.83804 Val Loss = 0.87352
+2024-12-24 00:58:17.508540 Epoch 8  	Train Loss = 0.83164 Val Loss = 0.86684
+2024-12-24 02:25:49.021523 Epoch 9  	Train Loss = 0.82596 Val Loss = 0.85853
+2024-12-24 03:48:45.429348 Epoch 10  	Train Loss = 0.82386 Val Loss = 0.85636
+2024-12-24 05:18:11.236021 Epoch 11  	Train Loss = 0.81658 Val Loss = 0.85412
+2024-12-24 06:46:15.841470 Epoch 12  	Train Loss = 0.81227 Val Loss = 0.84954
+2024-12-24 08:15:11.664532 Epoch 13  	Train Loss = 0.80828 Val Loss = 0.84552
+2024-12-24 09:46:53.495362 Epoch 14  	Train Loss = 0.80431 Val Loss = 0.84326

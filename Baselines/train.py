@@ -20,7 +20,7 @@ from lib.utils import (
     CustomJSONEncoder,
 )
 from lib.metrics import RMSE_MAE_MAPE
-from lib.data_prepare import get_dt_dataloaders, get_edge_data_loader
+from lib.data_prepare import get_dt_dataloaders, loadData, readStaticData
 
 # ! X shape: (B, T, N, C)
 
@@ -128,7 +128,10 @@ def train(
         train_total = 0
         for dt in train_list:
             print(f"Loading {dt} data...")
-            trainset_loader, scaler = get_dt_dataloaders(dt, model=model_name)
+            if model_name == 'PatchSTG':
+                trainset_loader, scaler = loadData(dt)
+            else:
+                trainset_loader, scaler = get_dt_dataloaders(dt, model=model_name)
             print(f"Training on {dt}...")
             train_cur = train_one_epoch(
                 model, trainset_loader, optimizer, scheduler, criterion, clip_grad, scaler, log=log
@@ -138,7 +141,10 @@ def train(
             
         print("loading val data...")
         for dt in val_list:
-            valset_loader, valset_loader_scaler = get_dt_dataloaders(dt, model=model_name)
+            if model_name == 'PatchSTG':
+                valset_loader, valset_loader_scaler = loadData(dt)
+            else:
+                valset_loader, valset_loader_scaler = get_dt_dataloaders(dt, model=model_name)
             val_cur = eval_model(model, valset_loader, criterion, valset_loader_scaler)
             print("Val Loss = %.5f" % val_cur)
             val_total += val_cur
@@ -304,7 +310,7 @@ if __name__ == "__main__":
     elif model_name == "Linear":
         from MLP.model import LinearModel
         model = LinearModel(**cfg["model_args"])
-    elif model_name == "temp":
+    elif model_name == "Attention":
         from Attention.model import AttnMLPModel
         model = AttnMLPModel(**cfg["model_args"])
     elif model_name == "DCST":
@@ -317,11 +323,17 @@ if __name__ == "__main__":
         from AGCRN.model import AGCRN
         model = AGCRN(**cfg["model_args"])
     elif model_name == "SAGE":
-        from SAGE.model import gwnet_sage
-        model = gwnet_sage(**cfg["model_args"])
+        from SAGE.model import STID
+        model = STID(**cfg["model_args"])
     elif model_name == "STID":
         from STID.model import STID
         model = STID(**cfg["model_args"])
+    elif model_name == "PatchSTG":
+        from PatchSTG.model import PatchSTG
+        model = PatchSTG(**cfg["model_args"])
+        adj_path = "../data/dis_adj.npy"
+        ori_parts_idx, reo_parts_idx, reo_all_idx = readStaticData(adj_path)
+        model.set_index(ori_parts_idx, reo_parts_idx, reo_all_idx)
     else:
         raise NotImplementedError
 
@@ -371,7 +383,10 @@ if __name__ == "__main__":
     rmse_all, mae_all, mape_all = 0, 0, 0
     print("loading test data...")
     for dt in test_list:
-        testset_loader, scaler = get_dt_dataloaders(dt ,model=model_name)
+        if model_name == "PatchSTG":
+            testset_loader, scaler = loadData(dt)
+        else:
+            testset_loader, scaler = get_dt_dataloaders(dt ,model=model_name)
         print_log("--------- Test ---------", log=log)
         print_log(f"Test on {dt}", log=log)
         rmse_cur, mae_cur, mape_cur = test_model(model, testset_loader, scaler, log=log)

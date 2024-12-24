@@ -29,14 +29,15 @@ def generate_edge_index(node_data, edge_text):
 
 
 
-dt = "20240701"
+dt = "20240910"
 file_path = f'hdfs://DClusterNmg3:8020/user/bigdata-dp/lvyanming/traffic_map/exp_data/sliding_data/{dt}/'
 data_x = read_hdfs_npy(file_path + "windowed_data.npy")
-data_x = data_x.transpose(0, 2, 1, 3)
-print(data_x[0, 0, 0, 0])
-edge_text_path = "hdfs://DClusterNmg3:8020/user/bigdata-dp/lvyanming/traffic_map/exp_data/link_edge_data.txt"
-edge_data = generate_edge_index(data_x, edge_text_path)
-print(edge_data.shape)
+data_x = data_x.transpose(0, 2, 1, 3)[0, 0, :10, 0]
+data_x = data_x.astype(int).astype(str)
+print(data_x)
+# edge_text_path = "hdfs://DClusterNmg3:8020/user/bigdata-dp/lvyanming/traffic_map/exp_data/link_edge_data.txt"
+# edge_data = generate_edge_index(data_x, edge_text_path)
+# print(edge_data.shape)
 
 # data_x = data_x.transpose(0, 2, 1, 3)
 # data_x = data_x[0, 0, :400, 0]
