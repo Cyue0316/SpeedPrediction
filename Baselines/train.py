@@ -11,6 +11,7 @@ import yaml
 import sys
 import copy
 
+
 sys.path.append("..")
 from lib.utils import (
     MaskedMAELoss,
@@ -23,6 +24,33 @@ from lib.metrics import RMSE_MAE_MAPE
 from lib.data_prepare import get_dt_dataloaders, loadData, readStaticData
 
 # ! X shape: (B, T, N, C)
+
+
+class WeightedHuberLoss(nn.Module):
+    def __init__(self, delta=1.0, weight_high=1.0, weight_low=2.0):
+        super(WeightedHuberLoss, self).__init__()
+        self.delta = delta
+        self.weight_high = weight_high  # 对高估的惩罚权重
+        self.weight_low = weight_low    # 对低估的惩罚权重
+    
+    def forward(self, y_pred, y_true):
+        # 计算误差
+        error = y_pred - y_true
+        # 计算绝对误差
+        abs_error = torch.abs(error)
+        
+        weight = self.weight_high if error > 0 else self.weight_low
+        
+        if abs_error < self.delta:
+            # 对低估和高估误差进行加权
+            loss_low = weight * (self.weight_low * (0.5 * abs_error ** 2))
+        else:
+            loss_high = weight * (self.weight_high * (self.delta * abs_error - 0.5 * self.delta ** 2))
+        
+        # 最终的加权损失
+        loss = loss_low + loss_high
+        return loss.mean()
+
 
 
 @torch.no_grad()
@@ -128,8 +156,11 @@ def train(
         train_total = 0
         for dt in train_list:
             print(f"Loading {dt} data...")
-            if model_name == 'PatchSTG':
+            if model_name == "PatchSTG" or "SAGE" or "PatchGCN":
                 trainset_loader, scaler = loadData(dt)
+                # adj_path = "../data/dis_adj.npy"
+                # ori_parts_idx, reo_parts_idx, reo_all_idx = readStaticData(adj_path, dt)
+                # model.set_index(ori_parts_idx, reo_parts_idx, reo_all_idx)
             else:
                 trainset_loader, scaler = get_dt_dataloaders(dt, model=model_name)
             print(f"Training on {dt}...")
@@ -141,8 +172,11 @@ def train(
             
         print("loading val data...")
         for dt in val_list:
-            if model_name == 'PatchSTG':
+            if model_name == "PatchSTG" or "SAGE" or "PatchGCN":
                 valset_loader, valset_loader_scaler = loadData(dt)
+                # adj_path = "../data/dis_adj.npy"
+                # ori_parts_idx, reo_parts_idx, reo_all_idx = readStaticData(adj_path, dt)
+                # model.set_index(ori_parts_idx, reo_parts_idx, reo_all_idx)
             else:
                 valset_loader, valset_loader_scaler = get_dt_dataloaders(dt, model=model_name)
             val_cur = eval_model(model, valset_loader, criterion, valset_loader_scaler)
@@ -310,9 +344,6 @@ if __name__ == "__main__":
     elif model_name == "Linear":
         from MLP.model import LinearModel
         model = LinearModel(**cfg["model_args"])
-    elif model_name == "Attention":
-        from Attention.model import AttnMLPModel
-        model = AttnMLPModel(**cfg["model_args"])
     elif model_name == "DCST":
         from DCST.model import DCST
         model = DCST(**cfg["model_args"])
@@ -323,8 +354,11 @@ if __name__ == "__main__":
         from AGCRN.model import AGCRN
         model = AGCRN(**cfg["model_args"])
     elif model_name == "SAGE":
-        from SAGE.model import STID
-        model = STID(**cfg["model_args"])
+        from SAGE.model import PatchSTG
+        model = PatchSTG(**cfg["model_args"])
+        adj_path = "../data/dis_adj.npy"
+        ori_parts_idx, reo_parts_idx, reo_all_idx, _ = readStaticData(adj_path)
+        model.set_index(ori_parts_idx, reo_parts_idx, reo_all_idx)
     elif model_name == "STID":
         from STID.model import STID
         model = STID(**cfg["model_args"])
@@ -332,14 +366,22 @@ if __name__ == "__main__":
         from PatchSTG.model import PatchSTG
         model = PatchSTG(**cfg["model_args"])
         adj_path = "../data/dis_adj.npy"
-        ori_parts_idx, reo_parts_idx, reo_all_idx = readStaticData(adj_path)
+        ori_parts_idx, reo_parts_idx, reo_all_idx, _ = readStaticData(adj_path)
         model.set_index(ori_parts_idx, reo_parts_idx, reo_all_idx)
+    elif model_name == "PatchGCN":
+        from PatchGCN.model import PatchGCN
+        model = PatchGCN(**cfg["model_args"])
+        adj_path = "../data/dis_adj.npy"
+        ori_parts_idx, reo_parts_idx, reo_all_idx, area_index = readStaticData(adj_path)
+        model.set_index(ori_parts_idx, reo_parts_idx, reo_all_idx, area_index)
     else:
         raise NotImplementedError
 
     # ---------------------- set loss, optimizer, scheduler ---------------------- #
 
     criterion = nn.HuberLoss()
+    # 使用加权的 Huber Loss
+    # criterion = WeightedHuberLoss(weight_high=1.0, weight_low=2.0)
 
     optimizer = torch.optim.Adam(
         model.parameters(),
@@ -357,7 +399,25 @@ if __name__ == "__main__":
     # --------------------------- train and test model --------------------------- #
      
     print_log(f"Loss: {criterion._get_name()}", log=log)
+    total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    # from torchinfo import summary
+    # print_log(
+    #     summary(
+    #         model,
+    #         [
+    #             cfg["batch_size"],
+    #             cfg["in_steps"],
+    #             cfg["num_nodes"],
+    #             4,
+    #         ],
+    #         verbose=0,
+    #     ),
+    #     log=log,
+    # )
+    print_log(f"Total parameters: {total_params}", log=log)
     print_log(log=log)
+    
+    
 
 
     valset_loader = None
@@ -383,8 +443,11 @@ if __name__ == "__main__":
     rmse_all, mae_all, mape_all = 0, 0, 0
     print("loading test data...")
     for dt in test_list:
-        if model_name == "PatchSTG":
+        if model_name == "PatchSTG" or "SAGE" or "PatchGCN":
             testset_loader, scaler = loadData(dt)
+            # adj_path = "../data/dis_adj.npy"
+            # ori_parts_idx, reo_parts_idx, reo_all_idx, _ = readStaticData(adj_path, dt)
+            # model.set_index(ori_parts_idx, reo_parts_idx, reo_all_idx)
         else:
             testset_loader, scaler = get_dt_dataloaders(dt ,model=model_name)
         print_log("--------- Test ---------", log=log)

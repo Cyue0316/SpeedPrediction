@@ -20,7 +20,7 @@ from lib.utils import (
     CustomJSONEncoder,
 )
 from lib.metrics import RMSE_MAE_MAPE
-from lib.data_prepare import get_dt_dataloaders, get_edge_data_loader
+from lib.data_prepare import get_dt_dataloaders, loadData, readStaticData
 
 # ! X shape: (B, T, N, C)
 
@@ -153,9 +153,6 @@ if __name__ == "__main__":
     elif model_name == "Linear":
         from MLP.model import LinearModel
         model = LinearModel(**cfg["model_args"])
-    elif model_name == "temp":
-        from Attention.model import AttnMLPModel
-        model = AttnMLPModel(**cfg["model_args"])
     elif model_name == "DCST":
         from DCST.model import DCST
         model = DCST(**cfg["model_args"])
@@ -166,11 +163,26 @@ if __name__ == "__main__":
         from AGCRN.model import AGCRN
         model = AGCRN(**cfg["model_args"])
     elif model_name == "SAGE":
-        from SAGE.model import gwnet_sage
-        model = gwnet_sage(**cfg["model_args"])
+        from SAGE.model import PatchSTG
+        model = PatchSTG(**cfg["model_args"])
+        adj_path = "../data/dis_adj.npy"
+        ori_parts_idx, reo_parts_idx, reo_all_idx = readStaticData(adj_path)
+        model.set_index(ori_parts_idx, reo_parts_idx, reo_all_idx)
     elif model_name == "STID":
         from STID.model import STID
         model = STID(**cfg["model_args"])
+    elif model_name == "PatchSTG":
+        from PatchSTG.model import PatchSTG
+        model = PatchSTG(**cfg["model_args"])
+        adj_path = "../data/dis_adj.npy"
+        ori_parts_idx, reo_parts_idx, reo_all_idx = readStaticData(adj_path)
+        model.set_index(ori_parts_idx, reo_parts_idx, reo_all_idx)
+    elif model_name == "PatchGCN":
+        from PatchGCN.model import PatchGCN
+        model = PatchGCN(**cfg["model_args"])
+        adj_path = "../data/dis_adj.npy"
+        ori_parts_idx, reo_parts_idx, reo_all_idx = readStaticData(adj_path)
+        model.set_index(ori_parts_idx, reo_parts_idx, reo_all_idx)
     else:
         raise NotImplementedError
 
@@ -195,23 +207,33 @@ if __name__ == "__main__":
      
     
     # 加载权重字典
-    state_dict = torch.load('./saved_models/{}/STID-didi-2024-12-11-17-33-09.pt'.format(model_name))
+    state_dict = torch.load('./saved_models/{}/PatchSTG-didi-2024-12-23-12-59-48.pt'.format(model_name))
 
     # 加载到模型
     model.load_state_dict(state_dict)
     model = model.to(DEVICE)
     print("loading test data...")
     
-    dt="20240910"
-    # for dt in val_list:
-    testset_loader, scaler = get_dt_dataloaders(dt ,model=model_name)
-    y_true, y_pred = predict(model, testset_loader, scaler)
-    print(y_true.shape)
-    print(y_pred.shape)
-    print(y_true[0,:,0])
-    print(y_pred[0,:,0])
-    # save_path = "./STID-/{}/".format(dt)
-    # os.makedirs(os.path.dirname(save_path), exist_ok=True)
-    # save_path += "predict_y.npy"
-    # y_pred = y_pred.transpose(0, 2, 1, 3)
-    # np.save(save_path, y_pred)
+    val_list += test_list
+    # dt="20240910"
+    for dt in val_list:
+        if model_name == "PatchSTG":
+            testset_loader, scaler, indices = loadData(dt, mode='test')
+        else:
+            testset_loader, scaler, indices = get_dt_dataloaders(dt, mode='test', model=model_name)
+        y_true, y_pred = predict(model, testset_loader, scaler)
+        rmse_all, mae_all, mape_all = RMSE_MAE_MAPE(y_true, y_pred)
+        out_str = "All Steps RMSE = %.5f, MAE = %.5f, MAPE = %.5f\n" % (
+            rmse_all,
+            mae_all,
+            mape_all,
+        )
+        print(y_true.shape)
+        print(y_pred.shape)
+        print(out_str)
+        save_path = "./{}-/".format(model_name)
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        save_path += f"{dt}_predict.npy"
+        y_pred = y_pred[torch.argsort(indices)]
+        y_pred = y_pred.transpose(0, 2, 1, 3)
+        np.save(save_path, y_pred)

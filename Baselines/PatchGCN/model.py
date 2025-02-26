@@ -170,7 +170,7 @@ class WindowAttBlock(nn.Module):
         self.snorm2 = nn.LayerNorm(hidden_size, elementwise_affine=False, eps=1e-6)
         self.smlp = Mlp(in_features=hidden_size, hidden_features=mlp_hidden_dim, act_layer=nn.GELU, drop=0.1)
 
-    def forward(self, x, adj):
+    def forward(self, x, adj, area_index):
         B,T,_,D = x.shape
 
         # P: patch num and N: patch size
@@ -180,21 +180,29 @@ class WindowAttBlock(nn.Module):
         x = x.reshape(B, T, P, N, D)
 
         # depth attention
-        # if self.cross:
-        x_forward = torch.roll(x, shifts=1, dims=2)
-        x_backward = torch.roll(x, shifts=-1, dims=2)
-        q = self.snorm1(x.reshape(B*T*P,N,D))
-        kv = torch.cat([x_forward, x_backward], dim=3)
-        kv = self.snorm1(kv.reshape(B*T*P,2*N,D))
-        x = x + self.cattn(q, kv).reshape(B, T, P, N, D)
+        if self.cross:
+            cross_mask = torch.tensor(area_index).to(x.device) == 1
+            self_mask = ~cross_mask
+            
+            x_forward = torch.roll(x, shifts=1, dims=2)
+            x_backward = torch.roll(x, shifts=-1, dims=2)
+            q = self.snorm1(x.reshape(B*T*P,N,D))
+            kv = torch.cat([x_forward, x_backward], dim=3)
+            kv = self.snorm1(kv.reshape(B*T*P,2*N,D))
+            if cross_mask.any():
+                cross_attn_out = self.cattn(q, kv).reshape(B, T, P, N, D)
+                x = x + cross_attn_out * cross_mask.view(1, 1, P, 1, 1)
+            if self_mask.any():
+                self_attn_out = self.sattn(q).reshape(B, T, P, N, D)
+                x = x + self_attn_out * self_mask.view(1, 1, P, 1, 1)
                 # x = x + self.sattn(q).reshape(B,T,P,N,D)
             # x = x + self.bcattn(q, backward_kv).reshape(B,T,P,N,D)
             
-        # else:
-        #     # qkv = self.snorm1(x.reshape(B*T,P,N,D))
-        #     qkv = self.snorm1(x.reshape(B*T*P,N,D))
-        #     # x = x + self.sgcn(qkv, sadj).reshape(B,T,P,N,D)
-        #     x = x + self.sattn(qkv).reshape(B,T,P,N,D)
+        else:
+            # qkv = self.snorm1(x.reshape(B*T,P,N,D))
+            qkv = self.snorm1(x.reshape(B*T*P,N,D))
+            # x = x + self.sgcn(qkv, sadj).reshape(B,T,P,N,D)
+            x = x + self.sattn(qkv).reshape(B,T,P,N,D)
         x = x + self.smlp(self.snorm2(x))
         
         # breadth attention
@@ -254,14 +262,14 @@ class series_decomp(nn.Module):
         
         return moving_mean, res
 
-class PatchSTG(nn.Module):
+class PatchGCN(nn.Module):
     def __init__(self, tem_patchsize, tem_patchnum,
                         node_num, spa_patchsize, spa_patchnum,
                         tod, dow,
                         layers, factors,
                         input_dims, node_dims, tod_dims, dow_dims
                 ):
-        super(PatchSTG, self).__init__()
+        super(PatchGCN, self).__init__()
         self.node_num = node_num
 
         self.tod, self.dow = tod, dow
@@ -323,7 +331,7 @@ class PatchSTG(nn.Module):
         self.ori_parts_idx = ori_parts_idx
         self.reo_parts_idx = reo_parts_idx
         self.reo_all_idx = reo_all_idx
-        # self.area_index = area_index
+        self.area_index = area_index
         # self.adj = adj
     
     
@@ -347,7 +355,7 @@ class PatchSTG(nn.Module):
         for block in self.spa_encoder:
             # rex = block(rex)
             # rex = block(rex, self.adj, self.sadj)
-            rex = block(rex, self.adj)
+            rex = block(rex, self.adj, self.area_index)
 
         orginal = torch.zeros(rex.shape[0],rex.shape[1],self.node_num,rex.shape[-1]).to(x.device)
         orginal[:,:,self.ori_parts_idx,:] = rex[:,:,self.reo_parts_idx,:] # back to the original indices

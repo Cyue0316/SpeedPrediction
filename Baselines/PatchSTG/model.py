@@ -82,7 +82,6 @@ class WindowAttBlock(nn.Module):
         qkv = self.nnorm1(x.transpose(2,3).reshape(B*T*N,P,D))
         x = x + self.nattn(qkv).reshape(B,T,N,P,D).transpose(2,3)
         x = x + self.nmlp(self.nnorm2(x))
-         
         return x.reshape(B,T,-1,D)
 
 class PatchSTG(nn.Module):

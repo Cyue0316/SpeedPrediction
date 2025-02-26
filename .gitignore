@@ -13,3 +13,4 @@ data/dis_adj.npy
 /Baselines/saved_models
 /Baselines/PatchSTG/__pycache__
 /Baselines/SAGE/__pycache__
+/Baselines/logs

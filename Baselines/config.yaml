@@ -284,31 +284,30 @@ SAGE:
     time_of_day: True
     day_of_week: True
 
-    lr: 0.001
-    weight_decay: 0.0003
+    lr: 0.002
+    weight_decay: 0.0001
     milestones: [20,30]
     lr_decay_rate: 0.1
-    batch_size: 16
+    batch_size: 8
     max_epochs: 20
     early_stop: 10
     use_cl: False
     cl_step_size: 2500
-    
+  
     model_args:
-      num_nodes: 16326
-      input_len: 12
-      input_dim: 3
-      embed_dim: 32
-      output_len: 12
-      num_layer: 1
-      if_node: True
-      node_dim: 32
-      if_T_i_D: True
-      if_D_i_W: True
-      temp_dim_tid: 32
-      temp_dim_diw: 32
-      time_of_day_size: 288
-      day_of_week_size: 7
+      factors: 8
+      layers: 5
+      tem_patchsize: 12
+      tem_patchnum: 1
+      spa_patchsize: 4
+      spa_patchnum: 4096
+      node_num: 16326
+      tod: 288
+      dow: 7
+      input_dims: 64
+      node_dims: 32
+      tod_dims: 32
+      dow_dims: 32
 
 
 AGCRN:
@@ -403,6 +402,41 @@ PatchSTG:
     use_cl: False
     cl_step_size: 2500
     
+    model_args:
+      factors: 8
+      layers: 5
+      tem_patchsize: 12
+      tem_patchnum: 1
+      spa_patchsize: 4
+      spa_patchnum: 4096
+      node_num: 16326
+      tod: 288
+      dow: 7
+      input_dims: 64
+      node_dims: 32
+      tod_dims: 32
+      dow_dims: 32
+
+PatchGCN:
+  didi:
+    num_nodes: 16326
+    in_steps: 12
+    out_steps: 12
+    train_size: 0.7
+    val_size: 0.1
+    time_of_day: True
+    day_of_week: True
+
+    lr: 0.002
+    weight_decay: 0.0001
+    milestones: [20,30]
+    lr_decay_rate: 0.1
+    batch_size: 8
+    max_epochs: 20
+    early_stop: 10
+    use_cl: False
+    cl_step_size: 2500
+  
     model_args:
       factors: 8
       layers: 5
