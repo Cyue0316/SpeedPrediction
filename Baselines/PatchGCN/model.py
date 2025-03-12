@@ -1,3 +1,4 @@
+import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -170,7 +171,7 @@ class WindowAttBlock(nn.Module):
         self.snorm2 = nn.LayerNorm(hidden_size, elementwise_affine=False, eps=1e-6)
         self.smlp = Mlp(in_features=hidden_size, hidden_features=mlp_hidden_dim, act_layer=nn.GELU, drop=0.1)
 
-    def forward(self, x, adj, area_index):
+    def forward(self, x, adj):
         B,T,_,D = x.shape
 
         # P: patch num and N: patch size
@@ -180,23 +181,14 @@ class WindowAttBlock(nn.Module):
         x = x.reshape(B, T, P, N, D)
 
         # depth attention
-        if self.cross:
-            cross_mask = torch.tensor(area_index).to(x.device) == 1
-            self_mask = ~cross_mask
-            
+        if self.cross:            
             x_forward = torch.roll(x, shifts=1, dims=2)
             x_backward = torch.roll(x, shifts=-1, dims=2)
             q = self.snorm1(x.reshape(B*T*P,N,D))
             kv = torch.cat([x_forward, x_backward], dim=3)
             kv = self.snorm1(kv.reshape(B*T*P,2*N,D))
-            if cross_mask.any():
-                cross_attn_out = self.cattn(q, kv).reshape(B, T, P, N, D)
-                x = x + cross_attn_out * cross_mask.view(1, 1, P, 1, 1)
-            if self_mask.any():
-                self_attn_out = self.sattn(q).reshape(B, T, P, N, D)
-                x = x + self_attn_out * self_mask.view(1, 1, P, 1, 1)
-                # x = x + self.sattn(q).reshape(B,T,P,N,D)
-            # x = x + self.bcattn(q, backward_kv).reshape(B,T,P,N,D)
+            # x = x + self.sattn(q).reshape(B,T,P,N,D)
+            x = x + self.cattn(q, kv).reshape(B,T,P,N,D)
             
         else:
             # qkv = self.snorm1(x.reshape(B*T,P,N,D))
@@ -260,7 +252,31 @@ class series_decomp(nn.Module):
         # 将结果合并回原始数据
         moving_mean = moving_mean.unsqueeze(-1)  # (B, T, N, 1)
         
-        return moving_mean, res
+        return moving_mean
+
+
+# class PositionalEmbedding(nn.Module):
+#     def __init__(self, d_model, max_len=12):
+#         super(PositionalEmbedding, self).__init__()
+#         # 计算位置编码并调整为四维
+#         pe = torch.zeros(max_len, d_model).float()
+#         pe.require_grad = False
+
+#         position = torch.arange(0, max_len).float().unsqueeze(1)
+#         div_term = (torch.arange(0, d_model, 2).float() 
+#                     * -(math.log(10000.0) / d_model)).exp()
+
+#         pe[:, 0::2] = torch.sin(position * div_term)
+#         pe[:, 1::2] = torch.cos(position * div_term)
+
+#         # 调整形状为 [1, max_len, 1, d_model] 以适配四维数据
+#         pe = pe.unsqueeze(0).unsqueeze(2)
+#         self.register_buffer('pe', pe)
+
+#     def forward(self, x):
+#         # 返回形状为 [1, T, 1, d_model]，T为当前序列长度
+#         # print(self.pe[:, :x.size(1), :, :].shape)
+#         return x + self.pe[:, :x.size(1), :, :]
 
 class PatchGCN(nn.Module):
     def __init__(self, tem_patchsize, tem_patchnum,
@@ -281,7 +297,8 @@ class PatchGCN(nn.Module):
         # spatio-temporal embedding -> section 4.1 in paper
         
         ##-- avg_smooth
-        self.serise_decomp = series_decomp(kernel_size=tem_patchsize+1)
+        self.series_decomp = series_decomp(kernel_size=tem_patchsize+1)
+        
         
         # input_emb
         self.input_st_fc = nn.Conv2d(in_channels=4, out_channels=input_dims, kernel_size=(1, tem_patchsize), stride=(1, tem_patchsize), bias=True)
@@ -312,26 +329,16 @@ class PatchGCN(nn.Module):
         self.regression_conv = nn.Conv2d(in_channels=tem_patchnum*dims, out_channels=tem_patchsize*tem_patchnum, kernel_size=(1, 1), bias=True)
         
         ##-- adj init
-        # self.nv1 = nn.Parameter(torch.empty(spa_patchsize * factors, spa_patchnum // factors, 64))
-        # self.nv2 = nn.Parameter(torch.empty(spa_patchsize * factors, 64, spa_patchnum // factors))
         self.adj = nn.Parameter(torch.empty(spa_patchsize*factors, spa_patchnum//factors, spa_patchnum//factors))
         nn.init.xavier_uniform_(self.adj)
-        
-        ##-- region init
-        # self.region_emb = nn.Parameter(torch.empty(spa_patchnum//factors, 32))
-        # nn.init.xavier_uniform_(self.region_emb)
-        
-        # self.sadj = nn.Parameter(torch.empty(spa_patchnum//factors, spa_patchsize*factors, spa_patchsize*factors))
-        # nn.init.xavier_uniform_(self.sadj)
-        # self.nv1 = nn.Parameter(torch.empty(spa_patchsize * factors, spa_patchnum // factors, 32))
-        # nn.init.xavier_uniform_(self.nv1)
+    
 
     
     def set_index(self, ori_parts_idx, reo_parts_idx, reo_all_idx, area_index=None):
         self.ori_parts_idx = ori_parts_idx
         self.reo_parts_idx = reo_parts_idx
         self.reo_all_idx = reo_all_idx
-        self.area_index = area_index
+        # self.area_index = area_index
         # self.adj = adj
     
     
@@ -340,22 +347,10 @@ class PatchGCN(nn.Module):
         # spatio-temporal embedding -> section 4.1 in paper
         embeded_x = self.embedding(x)
         rex = embeded_x[:,:,self.reo_all_idx,:] # select patched points
-        # B, T, N, _ = rex.shape
-        # P, _ = self.region_emb.shape
-        # region_emb = self.region_emb.unsqueeze(0).unsqueeze(0).unsqueeze(0)
-
-        # region_emb = region_emb.expand(B, T, N // P, P, -1).transpose(2, 3)
-
-        # region_emb = region_emb.reshape(B,T,N,-1)
-
-        # rex = torch.cat([rex, region_emb], dim=-1)
 
         # dual attention encoder -> section 4.3 in paper
-        # self.adj = torch.tensor(self.adj, dtype=torch.float32).to(x.device)
         for block in self.spa_encoder:
-            # rex = block(rex)
-            # rex = block(rex, self.adj, self.sadj)
-            rex = block(rex, self.adj, self.area_index)
+            rex = block(rex, self.adj)
 
         orginal = torch.zeros(rex.shape[0],rex.shape[1],self.node_num,rex.shape[-1]).to(x.device)
         orginal[:,:,self.ori_parts_idx,:] = rex[:,:,self.reo_parts_idx,:] # back to the original indices
@@ -377,13 +372,14 @@ class PatchGCN(nn.Module):
         # te = x[..., 1:] # [B,T,N,2]
         # x1 = x[..., :1]
         # input traffic + time of day + day of week as the input signal
-        x_smooth, _ = self.serise_decomp(x[..., :1])
+        x_smooth = self.series_decomp(x[..., :1])
         x1 = torch.cat([
             x_smooth,  # Traffic
             (x[..., 1:2] / self.tod),  # Time of day normalized
             (x[..., 2:3] / self.dow),  # Day of week normalized
             (x[..., 3:4] / 4) # status data normalized
         ], -1).float()
+        
         # Process input data
         input_data = self.input_st_fc(x1.transpose(1, 3)).transpose(1, 3)
         t, d = input_data.shape[1], input_data.shape[-1]
